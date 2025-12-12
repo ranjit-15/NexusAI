@@ -1,17 +1,13 @@
 import { Message, Role } from '../types';
 
 export class GeminiService {
-  private chatSession: Chat | null = null;
-  private currentModel: string | null = null;
-  private currentSystemInstruction: string | null = null;
-  
   // Helper to format history for the API
-  private formatHistory(messages: Message[]): Content[] {
+  private formatHistory(messages: Message[]) {
     return messages
       .filter(msg => msg.id !== 'welcome' && !msg.isError)
       .map(msg => ({
         role: msg.role === Role.USER ? 'user' : 'model',
-        parts: [{ text: msg.text } as Part]
+        text: msg.text
       }));
   }
 
@@ -67,9 +63,7 @@ export class GeminiService {
   }
 
   public startNewSession() {
-    this.chatSession = null;
-    this.currentModel = null;
-    this.currentSystemInstruction = null;
+    // Session is managed by the backend, nothing to clear on client
   }
 }
 
