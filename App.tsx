@@ -273,9 +273,9 @@ const App: React.FC = () => {
     } finally { setIsLoading(false); }
   };
 
-  const handleSubmit = async (text?: string) => {
+  const handleSubmit = async (textOrEvent?: string | React.MouseEvent) => {
     if (isListening) toggleListening();
-    const userText = (text || inputValue).trim();
+    const userText = (typeof textOrEvent === 'string' ? textOrEvent : inputValue).trim();
     if (!userText || isLoading) return;
     setInputValue('');
 
