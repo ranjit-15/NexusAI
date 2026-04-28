@@ -120,9 +120,12 @@ export default function UserProfileModal({ profile, onClose, onUpdate, onDeleteA
                 />
               </div>
             ) : (
-              <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsEditingName(true)}>
+              <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsEditingName(true)} title="Edit Display Name">
                 <h3 className="text-xl font-bold text-white group-hover:text-gray-200">{profile.displayName}</h3>
-                <span className="text-xs px-2 py-0.5 bg-white/10 rounded text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">Edit</span>
+                <span className="text-xs px-2 py-1 bg-white/10 rounded text-gray-300 hover:bg-white/20 transition-all flex items-center gap-1">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                  Edit Name
+                </span>
               </div>
             )}
           </div>
@@ -259,7 +262,7 @@ export default function UserProfileModal({ profile, onClose, onUpdate, onDeleteA
         </div>
 
         {/* Footer */}
-        <div className="p-4 border-t border-white/10 bg-black/20">
+        <div className="p-4 border-t border-white/10 bg-black/20 flex flex-col gap-4">
           <button
             onClick={logoutUser}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-red-400 hover:bg-red-400/10 hover:text-red-300 transition-colors font-medium text-sm"
@@ -267,6 +270,13 @@ export default function UserProfileModal({ profile, onClose, onUpdate, onDeleteA
             <LogOut size={16} />
             Log Out
           </button>
+
+          {/* Developer Credit */}
+          <div className="text-center">
+            <p className="text-[11px] text-gray-500 mb-1">Designed & Developed by</p>
+            <a href="https://www.linkedin.com/in/ranjit-yadav-2ab635200/" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-[#10a37f] hover:text-[#0e8c6d] transition-colors inline-block mr-3">Ranjit Yadav</a>
+            <a href="https://github.com/ranjit-15" target="_blank" rel="noopener noreferrer" className="text-[11px] text-gray-400 hover:text-white transition-colors inline-block">GitHub</a>
+          </div>
         </div>
 
       </div>

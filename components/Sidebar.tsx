@@ -36,11 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => window.location.reload()}
           title="Refresh page"
         >
-          <div className="logo-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-            </svg>
-          </div>
+          <img src="/logo.png" alt="NexusAI Logo" className="w-6 h-6 object-contain rounded-md" />
           <span className="font-semibold text-sm whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
             NexusAI
           </span>

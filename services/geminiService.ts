@@ -49,7 +49,11 @@ export class GeminiService {
       }
     } catch (e) {}
 
-    if (model === 'image-generator') {
+    const isImageReq = model === 'image-generator' || 
+                       message.toLowerCase().startsWith('/image') || 
+                       message.toLowerCase().startsWith('generate an image');
+
+    if (isImageReq) {
       const keys = [
         'v1-Z0FBQUFBQnB6U2NaWjM1dlRuc3hJT2NibGNBMGRfS1A5MVBGRmdEMFJKcWRwNzByZHlDdk91YnJhSi1zdVc2ZVJVcUoyRGNPZ01ZTWp6WE9pQ3Q5bTR4NjFObmRJeW9DcWc9PQ==',
         'v1-Z0FBQUFBQnB6UWJfTEphUko1UU9IV2trZk1yMlQ2cEhEekw2YUdDeEs5ajJmU2JQNnBzTFd3Sm1oM0VpaEc1Tk1jMHZiU2pfNG1qR3lYZEpyYVZEUmZuUzZ5Wk9iLW9vWGc9PQ==',
@@ -131,10 +135,19 @@ export class GeminiService {
   }
 
   public async generateSpeech(text: string): Promise<string> {
+    let apiKey = undefined;
+    try {
+      const raw = localStorage.getItem('nexus_user_profile');
+      if (raw) {
+        const profile = JSON.parse(raw);
+        if (profile.apiKey) apiKey = profile.apiKey;
+      }
+    } catch (e) {}
+
     const response = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, apiKey }),
     });
 
     if (!response.ok) {

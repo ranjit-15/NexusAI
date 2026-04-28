@@ -471,10 +471,8 @@ const App: React.FC = () => {
           <div className="messages-inner">
             {isWelcome ? (
               <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
-                <div className="logo-icon w-14 h-14 mb-5 animate-float">
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
-                  </svg>
+                <div className="w-16 h-16 mb-5 animate-float rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                  <img src="/logo.png" alt="NexusAI Logo" className="w-full h-full object-cover" />
                 </div>
                 <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
                   What can I help you with?

@@ -102,12 +102,14 @@ app.post('/api/chat', async (req, res) => {
 
 // TTS
 app.post('/api/tts', async (req, res) => {
-  if (!client) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
+  const reqApiKey = req.body.apiKey;
+  const currentClient = reqApiKey ? new GoogleGenAI({ apiKey: reqApiKey }) : client;
+  if (!currentClient) return res.status(500).json({ error: 'GEMINI_API_KEY not set' });
   try {
     const { text } = req.body || {};
     if (!text) return res.status(400).json({ error: 'Missing text' });
 
-    const response = await client.models.generateContent({
+    const response = await currentClient.models.generateContent({
       model: 'gemini-2.5-flash-preview-tts',
       contents: [{ parts: [{ text }] }],
       config: {
