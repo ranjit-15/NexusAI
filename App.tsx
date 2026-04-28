@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Lightbulb, PenTool, Plus, Cloud, CloudOff } from 'lucide-react';
+import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Lightbulb, PenTool, Plus, Cloud, CloudOff, Image as ImageIcon } from 'lucide-react';
 import { geminiService } from './services/geminiService';
 import { Message, Role, Persona, ModelOption, ChatSession } from './types';
 import { PERSONAS } from './constants/personas';
@@ -55,7 +55,7 @@ interface IWindow extends Window { webkitSpeechRecognition: any; SpeechRecogniti
 
 const WELCOME_SUGGESTIONS = [
   { icon: Code, text: 'Write a Python script', desc: 'to scrape website data' },
-  { icon: Lightbulb, text: 'Explain quantum computing', desc: 'in simple terms' },
+  { icon: ImageIcon, text: 'Generate an image', desc: 'of a futuristic city' },
   { icon: PenTool, text: 'Write a story', desc: 'about a time traveler' },
   { icon: Zap, text: 'Help me debug', desc: 'my React application' },
 ];

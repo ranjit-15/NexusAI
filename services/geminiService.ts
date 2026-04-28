@@ -16,6 +16,8 @@ const FALLBACK_MODELS: ModelOption[] = [
   { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fastest and most budget-friendly 2.5 model', capabilities: ['text', 'thinking'] },
   // ── Gemini 2.0 (Legacy) ──
   { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Previous gen workhorse, 1M context', capabilities: ['text'] },
+  // ── Image Generation ──
+  { id: 'image-generator', name: 'Image Generator (Pico)', description: 'Generate high quality images from text', capabilities: ['image'] },
 ];
 
 export class GeminiService {
@@ -46,6 +48,41 @@ export class GeminiService {
         if (profile.apiKey) apiKey = profile.apiKey;
       }
     } catch (e) {}
+
+    if (model === 'image-generator') {
+      const keys = [
+        'v1-Z0FBQUFBQnB6U2NaWjM1dlRuc3hJT2NibGNBMGRfS1A5MVBGRmdEMFJKcWRwNzByZHlDdk91YnJhSi1zdVc2ZVJVcUoyRGNPZ01ZTWp6WE9pQ3Q5bTR4NjFObmRJeW9DcWc9PQ==',
+        'v1-Z0FBQUFBQnB6UWJfTEphUko1UU9IV2trZk1yMlQ2cEhEekw2YUdDeEs5ajJmU2JQNnBzTFd3Sm1oM0VpaEc1Tk1jMHZiU2pfNG1qR3lYZEpyYVZEUmZuUzZ5Wk9iLW9vWGc9PQ==',
+        'v1-Z0FBQUFBQnBZRzl4bEl1b3d3Q1R5bWJoTE1Gamx0Qy00am0zT1ZCdzR3NElwUFVaLVlUUEJIbmpVMDhPMkRsRnM0YWN3NmRKRDBlZkhiQTVWcGEzVGJ6REh0YmJyTlZzMGc9PQ=='
+      ];
+      let success = false;
+      let lastError = null;
+
+      for (const key of keys) {
+        try {
+          const res = await fetch(`https://backend.buildpicoapps.com/aero/run/image-generation-api?pk=${key}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: message.replace('/image', '').trim() })
+          });
+          const data = await res.json();
+          if (data.status === 'success' && data.imageUrl) {
+            yield `![Generated Image](${data.imageUrl})\n\n_Generated based on: "${message}"_`;
+            success = true;
+            break;
+          } else {
+            lastError = data.message || 'API Limit reached or failed';
+          }
+        } catch (e: any) {
+          lastError = e.message;
+        }
+      }
+
+      if (!success) {
+        throw new Error(`Image Generation Failed: ${lastError}`);
+      }
+      return;
+    }
 
     const body = {
       message,
@@ -95,12 +132,24 @@ export class GeminiService {
       const data = await response.json();
       const models = Array.isArray(data.models) ? data.models : [];
       if (!models.length) return FALLBACK_MODELS;
-      return models.map((m: any) => ({
+      
+      const parsed = models.map((m: any) => ({
         id: m.id,
         name: m.name || m.id,
         description: m.description,
         capabilities: Array.isArray(m.capabilities) ? m.capabilities : ['text'],
       }));
+
+      // Ensure Image Generator is always available
+      if (!parsed.some((m: ModelOption) => m.id === 'image-generator')) {
+        parsed.push({
+          id: 'image-generator', 
+          name: 'Image Generator (Pico)', 
+          description: 'Generate high quality images from text', 
+          capabilities: ['image']
+        });
+      }
+      return parsed;
     } catch {
       return FALLBACK_MODELS;
     }
