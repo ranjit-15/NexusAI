@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, Role } from '../types';
-import { User, Bot, AlertCircle, Volume2, StopCircle, Loader2, Copy, Check, RefreshCw } from 'lucide-react';
+import { User, Bot, AlertCircle, Volume2, StopCircle, Loader2, Copy, Check, RefreshCw, Download } from 'lucide-react';
 import { geminiService } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -155,6 +155,21 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                     </a>
                   ),
                   strong: ({ children }) => <strong className="font-semibold" style={{ color: 'var(--text-primary)' }}>{children}</strong>,
+                  img: ({ src, alt }) => (
+                    <div className="relative inline-block mt-2 group">
+                      <img src={src} alt={alt} className="max-w-full rounded-lg border border-transparent hover:border-purple-500/50 transition-all shadow-sm" />
+                      <a 
+                        href={src} 
+                        download="generated-image.png" 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="absolute bottom-3 right-3 bg-purple-600/90 hover:bg-purple-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium opacity-0 group-hover:opacity-100 transition-all flex items-center gap-1.5 shadow-lg backdrop-blur-sm"
+                        title="Download Image"
+                      >
+                        <Download size={14} /> Download
+                      </a>
+                    </div>
+                  ),
                   code({ node, inline, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '');
                     const lang = match ? match[1] : '';

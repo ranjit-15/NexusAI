@@ -101,7 +101,29 @@ export class GeminiService {
 
     if (!response.ok) {
       const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to generate response');
+      const errorMsg = err.error || err.message || '';
+      
+      // Fallback to Pico LLM API if Gemini fails (e.g., missing/invalid API key)
+      if (!apiKey || errorMsg.includes('API key') || response.status === 400 || response.status === 401 || response.status === 403) {
+        try {
+          // Use one of the provided Pico keys
+          const picoKey = 'v1-Z0FBQUFBQnB6U2NaWjM1dlRuc3hJT2NibGNBMGRfS1A5MVBGRmdEMFJKcWRwNzByZHlDdk91YnJhSi1zdVc2ZVJVcUoyRGNPZ01ZTWp6WE9pQ3Q5bTR4NjFObmRJeW9DcWc9PQ==';
+          const fallbackRes = await fetch(`https://backend.buildpicoapps.com/aero/run/llm-api?pk=${picoKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: message })
+          });
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData.status === 'success' && fallbackData.text) {
+            yield fallbackData.text;
+            return;
+          }
+        } catch (e) {
+          // Ignore fallback error and throw original error
+        }
+      }
+
+      throw new Error(errorMsg || 'Failed to generate response');
     }
 
     const data = await response.json();
