@@ -1,502 +1,552 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, Sparkles, AlertTriangle, BrainCircuit, Mic, StopCircle, ChevronDown, Check } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Lightbulb, PenTool, Plus, Cloud, CloudOff } from 'lucide-react';
 import { geminiService } from './services/geminiService';
-import { Message, Role, Persona } from './types';
+import { Message, Role, Persona, ModelOption, ChatSession } from './types';
 import { PERSONAS } from './constants/personas';
 import ChatMessage from './components/ChatMessage';
 import TypingIndicator from './components/TypingIndicator';
+import Sidebar from './components/Sidebar';
+import { saveSession, loadSessionsFromFirestore, deleteSessionFromFirestore } from './src/firestoreService';
+import { getUserProfile } from './src/userService';
+import AuthModal from './components/AuthModal';
+import UserProfileModal from './components/UserProfileModal';
+import { UserProfile } from './types';
 
-const STORAGE_KEY = 'chat_history';
+const MODEL_KEY = 'nexus_model';
 
-// Interface for Web Speech API
-interface IWindow extends Window {
-  webkitSpeechRecognition: any;
-  SpeechRecognition: any;
-}
+const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
-// Simple ID generator for broader compatibility
-const generateId = () => Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+const parseMessages = (msgs: any[]): Message[] =>
+  (msgs || []).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
+
+const getChatTitle = (msgs: Message[]): string => {
+  const first = msgs.find(m => m.role === Role.USER && m.text?.trim());
+  if (!first) return 'New Chat';
+  const t = first.text.replace(/\s+/g, ' ').trim();
+  return t.length > 50 ? t.slice(0, 50) + '…' : t;
+};
+
+// Local cache helpers (fast, offline fallback)
+const getSessionsKey = (username?: string) => `nexus_sessions_${username || 'guest'}`;
+
+const loadLocalSessions = (username?: string): ChatSession[] => {
+  try {
+    const raw = localStorage.getItem(getSessionsKey(username));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .map((s: any) => ({
+        id: String(s.id || genId()),
+        title: String(s.title || 'New Chat'),
+        updatedAt: Number(s.updatedAt) || Date.now(),
+        messages: parseMessages(s.messages || []),
+        model: s.model,
+      }))
+      .filter((s: ChatSession) => s.messages.length > 0);
+  } catch { return []; }
+};
+
+const saveLocalSessions = (sessions: ChatSession[], username?: string) => {
+  localStorage.setItem(getSessionsKey(username), JSON.stringify(sessions.slice(0, 50)));
+};
+
+interface IWindow extends Window { webkitSpeechRecognition: any; SpeechRecognition: any; }
+
+const WELCOME_SUGGESTIONS = [
+  { icon: Code, text: 'Write a Python script', desc: 'to scrape website data' },
+  { icon: Lightbulb, text: 'Explain quantum computing', desc: 'in simple terms' },
+  { icon: PenTool, text: 'Write a story', desc: 'about a time traveler' },
+  { icon: Zap, text: 'Help me debug', desc: 'my React application' },
+];
 
 const App: React.FC = () => {
-  const [messages, setMessages] = useState<Message[]>(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.map((msg: any) => ({
-          ...msg,
-          timestamp: new Date(msg.timestamp)
-        }));
-      }
-    } catch (e) {
-      console.error("Failed to load chat history:", e);
-    }
-    
-    return [
-      {
-        id: 'welcome',
-        role: Role.MODEL,
-        text: "Hello! I'm your AI assistant. How can I help you today?",
-        timestamp: new Date()
-      }
-    ];
-  });
-  
+  // Boot from local cache instantly; Firestore will merge in the background
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => getUserProfile());
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [sessions, setSessions] = useState<ChatSession[]>(() => loadLocalSessions(getUserProfile()?.username));
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('syncing');
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isThinkingMode, setIsThinkingMode] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<Persona>(PERSONAS[0]);
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>(
+    () => localStorage.getItem(MODEL_KEY) || 'gemini-2.5-flash'
+  );
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
-  
+  // Sidebar: open by default on desktop, closed on mobile
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => window.innerWidth >= 768);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const recognitionRef = useRef<any>(null);
   const textBeforeListening = useRef('');
+  const modelMenuRef = useRef<HTMLDivElement>(null);
   const personaMenuRef = useRef<HTMLDivElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
-
+  // ── Theme initialization ────────────────────────────────────────────────
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, isLoading]);
+    if (userProfile?.theme === 'light') {
+      document.documentElement.classList.add('light-theme');
+    } else {
+      document.documentElement.classList.remove('light-theme');
+    }
+  }, [userProfile?.theme]);
 
-  // Save messages to localStorage whenever they change
+  // ── Firestore sync: load sessions on mount ──────────────────────────────
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(messages));
+    if (!userProfile) return; // Do not fetch if no user
+
+    let mounted = true;
+    setSyncStatus('syncing');
+    loadSessionsFromFirestore()
+      .then(firestoreSessions => {
+        if (!mounted) return;
+        setSessions(firestoreSessions);
+        saveLocalSessions(firestoreSessions, userProfile.username); // update local cache
+        setSyncStatus('synced');
+      })
+      .catch(() => {
+        if (mounted) setSyncStatus('error');
+      });
+    return () => { mounted = false; };
+  }, [userProfile]);
+
+  // ── Save to localStorage (instant) + Firestore (async) on sessions change ─
+  useEffect(() => {
+    saveLocalSessions(sessions, userProfile?.username);
+  }, [sessions, userProfile?.username]);
+
+  useEffect(() => { localStorage.setItem(MODEL_KEY, selectedModel); }, [selectedModel]);
+
+  // Sync messages back to session and persist to Firestore
+  useEffect(() => {
+    if (activeId && messages.length > 0) {
+      setSessions(prev => {
+        const updated = prev.map(s =>
+          s.id === activeId
+            ? { ...s, title: getChatTitle(messages), updatedAt: Date.now(), messages }
+            : s
+        );
+        // Persist to Firestore in background
+        const updatedSession = updated.find(s => s.id === activeId);
+        if (updatedSession) {
+          saveSession(updatedSession).catch(console.error);
+        }
+        return updated;
+      });
+    }
   }, [messages]);
 
-  // Focus input on mount
+  // Scroll to bottom on new messages
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
-  // Close persona menu on outside click
+  // Focus input on mount and when chat changes
+  useEffect(() => { inputRef.current?.focus(); }, [activeId]);
+
+  // Close menus on outside click
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (personaMenuRef.current && !personaMenuRef.current.contains(event.target as Node)) {
+    const handle = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node))
+        setIsModelMenuOpen(false);
+      if (personaMenuRef.current && !personaMenuRef.current.contains(e.target as Node))
         setIsPersonaMenuOpen(false);
-      }
     };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    document.addEventListener('mousedown', handle);
+    return () => document.removeEventListener('mousedown', handle);
   }, []);
 
-  const handleClearChat = () => {
-    if (confirm('Are you sure you want to clear the conversation?')) {
-      geminiService.startNewSession();
-      const newMessages: Message[] = [{
-        id: generateId(),
-        role: Role.MODEL,
-        text: "Conversation cleared. What would you like to discuss now?",
-        timestamp: new Date()
-      }];
-      setMessages(newMessages);
-    }
+  // Load available models
+  useEffect(() => {
+    let mounted = true;
+    geminiService.fetchAvailableModels().then(models => {
+      if (!mounted) return;
+      setAvailableModels(models);
+      if (models.length && !models.some(m => m.id === selectedModel))
+        setSelectedModel(models[0].id);
+    });
+    return () => { mounted = false; };
+  }, []);
+
+  // Thinking mode guard
+  const supportsThinking = selectedModel.startsWith('gemini') || selectedModel.startsWith('gemma');
+  useEffect(() => { if (!supportsThinking && isThinking) setIsThinking(false); }, [supportsThinking]);
+
+  const startNewChat = useCallback(() => {
+    setActiveId(null);
+    setMessages([]);
+    // On mobile, close sidebar after selecting new chat
+    if (window.innerWidth < 768) setSidebarOpen(false);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  }, []);
+
+  const selectSession = useCallback((session: ChatSession) => {
+    setActiveId(session.id);
+    setMessages(session.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
+    if (window.innerWidth < 768) setSidebarOpen(false);
+  }, []);
+
+  const deleteSession = useCallback((id: string) => {
+    setSessions(prev => prev.filter(s => s.id !== id));
+    if (activeId === id) { setActiveId(null); setMessages([]); }
+    // Remove from Firestore in background
+    deleteSessionFromFirestore(id).catch(console.error);
+  }, [activeId]);
+
+  const deleteAllChats = useCallback(() => {
+    sessions.forEach(s => deleteSessionFromFirestore(s.id).catch(console.error));
+    setSessions([]);
+    setActiveId(null);
+    setMessages([]);
+  }, [sessions]);
+
+  const createSessionFromMessages = (msgs: Message[]): string => {
+    const id = genId();
+    const session: ChatSession = {
+      id,
+      title: getChatTitle(msgs),
+      updatedAt: Date.now(),
+      messages: msgs,
+      model: selectedModel,
+    };
+    setSessions(prev => [session, ...prev].slice(0, 50));
+    setActiveId(id);
+    // Persist to Firestore immediately
+    saveSession(session).catch(console.error);
+    return id;
   };
 
   const toggleListening = () => {
-    if (isListening) {
-      if (recognitionRef.current) {
-        recognitionRef.current.stop();
-      }
-      setIsListening(false);
-      return;
-    }
-
+    if (isListening) { recognitionRef.current?.stop(); setIsListening(false); return; }
     const w = window as unknown as IWindow;
-    const SpeechRecognition = w.SpeechRecognition || w.webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      alert("Your browser does not support voice input. Please try Chrome or Edge.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition;
+    if (!SR) { alert('Voice not supported in this browser. Try Chrome.'); return; }
+    const rec = new SR();
+    rec.continuous = true;
+    rec.interimResults = true;
+    rec.lang = 'en-US';
     textBeforeListening.current = inputValue;
-
-    recognition.onstart = () => {
-      setIsListening(true);
+    rec.onstart = () => setIsListening(true);
+    rec.onresult = (e: any) => {
+      let t = '';
+      for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+      setInputValue((textBeforeListening.current ? textBeforeListening.current + ' ' : '') + t);
     };
-
-    recognition.onresult = (event: any) => {
-      let transcript = '';
-      for (let i = 0; i < event.results.length; i++) {
-        transcript += event.results[i][0].transcript;
-      }
-      
-      const prefix = textBeforeListening.current ? textBeforeListening.current + ' ' : '';
-      setInputValue(prefix + transcript);
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error("Speech recognition error", event.error);
-      setIsListening(false);
-      
-      if (event.error === 'not-allowed') {
-        alert("Microphone access blocked. Please click the camera/lock icon in your address bar to allow microphone access.");
-      } else if (event.error === 'no-speech') {
-        // silently ignore
-      } else if (event.error !== 'aborted') {
-         // ignore aborted (manual stop)
-         console.warn(`Speech recognition error: ${event.error}`);
-      }
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
+    rec.onerror = () => setIsListening(false);
+    rec.onend = () => setIsListening(false);
+    recognitionRef.current = rec;
+    rec.start();
   };
 
   const handleRetry = async (errorMsgId: string) => {
-    const errorIndex = messages.findIndex(m => m.id === errorMsgId);
-    if (errorIndex === -1) return;
-    
-    // Ensure we have a preceding user message
-    const userMsg = messages[errorIndex - 1];
+    const idx = messages.findIndex(m => m.id === errorMsgId);
+    if (idx === -1) return;
+    const userMsg = messages[idx - 1];
     if (!userMsg || userMsg.role !== Role.USER) return;
-    
-    // Remove the error message from UI
-    setMessages(prev => prev.filter(m => m.id !== errorMsgId));
+
+    const botId = genId();
+    const newMsgs = [
+      ...messages.filter(m => m.id !== errorMsgId),
+      { id: botId, role: Role.MODEL, text: '', timestamp: new Date(), model: selectedModel },
+    ];
+    setMessages(newMsgs);
     setIsLoading(true);
 
-    // Create new bot placeholder
-    const botMessageId = generateId();
-    const initialBotMessage: Message = {
-      id: botMessageId,
-      role: Role.MODEL,
-      text: '',
-      timestamp: new Date()
-    };
-    
-    // Add placeholder
-    setMessages(prev => [...prev.filter(m => m.id !== errorMsgId), initialBotMessage]);
-
-    // History: all messages before the user message we are retrying for.
-    const history = messages.slice(0, errorIndex - 1);
-    
     try {
       const stream = geminiService.sendMessageStream(
-        userMsg.text, 
-        isThinkingMode, 
-        history,
-        selectedPersona.systemInstruction
+        userMsg.text, isThinking, messages.slice(0, idx - 1), selectedModel, selectedPersona.systemInstruction
       );
-      let fullResponse = '';
-
+      let full = '';
       for await (const chunk of stream) {
-        fullResponse += chunk;
-        setMessages(prev => prev.map(msg => 
-          msg.id === botMessageId 
-            ? { ...msg, text: fullResponse }
-            : msg
-        ));
+        full += chunk;
+        setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: full } : m));
       }
-    } catch (error: any) {
-        setMessages(prev => prev.map(msg => 
-        msg.id === botMessageId 
-          ? { 
-              ...msg, 
-              text: error.message || "Sorry, I encountered an error while processing your request.", 
-              isError: true 
-            }
-          : msg
-      ));
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (err: any) {
+      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: err.message || 'Error', isError: true } : m));
+    } finally { setIsLoading(false); }
   };
 
-  const handleSubmit = async (e?: React.FormEvent) => {
-    e?.preventDefault();
-    
-    if (isListening) {
-      toggleListening();
+  const handleSubmit = async (text?: string) => {
+    if (isListening) toggleListening();
+    const userText = (text || inputValue).trim();
+    if (!userText || isLoading) return;
+    setInputValue('');
+
+    const userMsg: Message = { id: genId(), role: Role.USER, text: userText, timestamp: new Date() };
+    const botId = genId();
+    const botMsg: Message = { id: botId, role: Role.MODEL, text: '', timestamp: new Date(), model: selectedModel };
+
+    const currentHistory = [...messages];
+    const newMessages = [...messages, userMsg, botMsg];
+    setMessages(newMessages);
+
+    if (!activeId) {
+      createSessionFromMessages([...currentHistory, userMsg, botMsg]);
     }
 
-    if (!inputValue.trim() || isLoading) return;
-
-    const userText = inputValue.trim();
-    setInputValue('');
-    
-    // Create User Message
-    const userMessage: Message = {
-      id: generateId(),
-      role: Role.USER,
-      text: userText,
-      timestamp: new Date()
-    };
-
-    // Capture current messages before update for history
-    const currentHistory = [...messages];
-
-    setMessages(prev => [...prev, userMessage]);
     setIsLoading(true);
-
-    // Create placeholder for Bot Message
-    const botMessageId = generateId();
-    const initialBotMessage: Message = {
-      id: botMessageId,
-      role: Role.MODEL,
-      text: '',
-      timestamp: new Date()
-    };
-
-    setMessages(prev => [...prev, initialBotMessage]);
 
     try {
       const stream = geminiService.sendMessageStream(
-        userText, 
-        isThinkingMode, 
-        currentHistory,
-        selectedPersona.systemInstruction
+        userText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction
       );
-      let fullResponse = '';
-
+      let full = '';
       for await (const chunk of stream) {
-        fullResponse += chunk;
-        
-        setMessages(prev => prev.map(msg => 
-          msg.id === botMessageId 
-            ? { ...msg, text: fullResponse }
-            : msg
-        ));
+        full += chunk;
+        setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: full } : m));
       }
-    } catch (error: any) {
-      console.error(error);
-      setMessages(prev => prev.map(msg => 
-        msg.id === botMessageId 
-          ? { 
-              ...msg, 
-              text: error.message || "Sorry, I encountered an error while processing your request.", 
-              isError: true 
-            }
-          : msg
-      ));
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (err: any) {
+      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: err.message || 'Error occurred', isError: true } : m));
+    } finally { setIsLoading(false); }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
   };
 
-  // Check if API Key is configured - backend handles key now
-  const isApiKeyMissing = false;
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setInputValue(e.target.value);
+    const el = e.target;
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+  };
+
+  const selectedModelOption = availableModels.find(m => m.id === selectedModel);
+  const isWelcome = messages.length === 0;
 
   return (
-    <div className="flex flex-col h-[100dvh] bg-[#030712] text-gray-100 font-sans relative overflow-hidden transition-all duration-300">
+    <div className="app-shell">
+      {!userProfile && (
+        <AuthModal onComplete={(profile) => setUserProfile(profile)} />
+      )}
       
-      {/* Ambient Background Effects */}
-      <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-purple-500/10 rounded-full blur-[120px] pointer-events-none" />
+      {showProfileModal && userProfile && (
+        <UserProfileModal 
+          profile={userProfile} 
+          onClose={() => setShowProfileModal(false)}
+          onUpdate={(profile) => setUserProfile(profile)}
+          onDeleteAllChats={deleteAllChats}
+        />
+      )}
 
-      {/* Header */}
-      <header className="flex-none h-20 flex items-center justify-between px-6 z-20 bg-transparent relative w-full max-w-5xl mx-auto">
-        <div className="flex items-center gap-3">
-          <div className="bg-gradient-to-tr from-indigo-500 to-violet-500 p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
-            <Sparkles size={22} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">
-              ChatBot
-            </h1>
-            <p className="text-xs text-gray-400 font-medium tracking-wide uppercase">AI Assistant</p>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-           {/* Persona Selector */}
-           <div className="relative" ref={personaMenuRef}>
+      {/* ── Sidebar ─────────────────────────────────────────── */}
+      <Sidebar
+        sessions={sessions}
+        activeId={activeId}
+        isOpen={sidebarOpen}
+        userProfile={userProfile}
+        onClose={() => setSidebarOpen(false)}
+        onNewChat={startNewChat}
+        onSelectSession={selectSession}
+        onDeleteSession={deleteSession}
+        onOpenProfile={() => setShowProfileModal(true)}
+      />
+
+      {/* Mobile overlay */}
+      <div
+        className={`sidebar-overlay md:hidden ${sidebarOpen ? 'visible' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
+      {/* ── Main Chat Area ───────────────────────────────────── */}
+      <div className="chat-area">
+
+        {/* Header */}
+        <header className="app-header">
+          <div className="flex items-center gap-2">
+            {/* Hamburger — toggles sidebar on both mobile & desktop */}
             <button
-              onClick={() => setIsPersonaMenuOpen(!isPersonaMenuOpen)}
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-medium text-gray-300 hover:text-white hover:bg-white/5 transition-all duration-200 border border-transparent hover:border-white/5"
+              onClick={() => setSidebarOpen(v => !v)}
+              className="icon-btn"
+              aria-label="Toggle sidebar"
             >
-              <selectedPersona.icon size={16} className="text-indigo-400" />
-              <span className="hidden md:block">{selectedPersona.name}</span>
-              <ChevronDown size={14} className={`transition-transform duration-200 ${isPersonaMenuOpen ? 'rotate-180' : ''}`} />
+              <Menu size={18} />
             </button>
 
-            {isPersonaMenuOpen && (
-              <div className="absolute right-0 mt-2 w-56 bg-[#11131f] border border-white/10 rounded-xl shadow-2xl backdrop-blur-xl z-50 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-                <div className="p-1">
-                  {PERSONAS.map((persona) => (
-                    <button
-                      key={persona.id}
-                      onClick={() => {
-                        setSelectedPersona(persona);
-                        setIsPersonaMenuOpen(false);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors ${
-                        selectedPersona.id === persona.id 
-                          ? 'bg-indigo-500/10 text-white' 
-                          : 'text-gray-400 hover:text-white hover:bg-white/5'
-                      }`}
-                    >
-                      <div className={`p-1.5 rounded-md ${selectedPersona.id === persona.id ? 'bg-indigo-500/20 text-indigo-400' : 'bg-gray-800/50 text-gray-500'}`}>
-                        <persona.icon size={14} />
+            {/* Removed New Chat shortcut and Sync Status icons per user request */}
+
+            {/* Model Selector */}
+            <div className="relative" ref={modelMenuRef}>
+              <button
+                onClick={() => setIsModelMenuOpen(!isModelMenuOpen)}
+                className="model-badge"
+              >
+                <Zap size={12} />
+                <span className="max-w-[140px] truncate">{selectedModelOption?.name || selectedModel}</span>
+                <ChevronDown size={11} className={`transition-transform ${isModelMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isModelMenuOpen && (
+                <div className="absolute left-0 top-full mt-2 w-[340px] max-w-[90vw] dropdown z-50 animate-fade-in">
+                  <div className="p-1.5 max-h-[50vh] overflow-y-auto">
+                    {availableModels.map(model => (
+                      <div
+                        key={model.id}
+                        onClick={() => { setSelectedModel(model.id); setIsModelMenuOpen(false); }}
+                        className={`dropdown-item flex items-start gap-2 ${selectedModel === model.id ? 'active' : ''}`}
+                      >
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{model.name}</div>
+                          {model.description && (
+                            <div className="text-[11px] mt-0.5" style={{ color: 'var(--text-muted)' }}>{model.description}</div>
+                          )}
+                          <div className="flex gap-1 mt-1.5">
+                            {(model.capabilities || ['text']).map(cap => (
+                              <span key={cap} className={`cap-badge cap-${cap}`}>{cap}</span>
+                            ))}
+                          </div>
+                        </div>
+                        {selectedModel === model.id && (
+                          <Check size={14} className="mt-1 flex-shrink-0" style={{ color: 'var(--accent)' }} />
+                        )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{persona.name}</div>
-                        <div className="text-[10px] text-gray-500 truncate">{persona.description}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Persona Selector */}
+            <div className="relative" ref={personaMenuRef}>
+              <button
+                onClick={() => setIsPersonaMenuOpen(!isPersonaMenuOpen)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ color: 'var(--text-secondary)', background: 'transparent', border: '1px solid transparent' }}
+                onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)'; }}
+                onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+              >
+                <selectedPersona.icon size={13} style={{ color: 'var(--accent)' }} />
+                <span className="hidden sm:inline">{selectedPersona.name}</span>
+                <ChevronDown size={11} className={`transition-transform ${isPersonaMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isPersonaMenuOpen && (
+                <div className="absolute right-0 top-full mt-2 w-[230px] dropdown z-50 animate-fade-in">
+                  <div className="p-1.5">
+                    {PERSONAS.map(p => (
+                      <div
+                        key={p.id}
+                        onClick={() => { setSelectedPersona(p); setIsPersonaMenuOpen(false); }}
+                        className={`dropdown-item flex items-center gap-2.5 ${selectedPersona.id === p.id ? 'active' : ''}`}
+                      >
+                        <p.icon size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
+                          <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{p.description}</div>
+                        </div>
+                        {selectedPersona.id === p.id && (
+                          <Check size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        )}
                       </div>
-                      {selectedPersona.id === persona.id && (
-                        <Check size={14} className="text-indigo-400" />
-                      )}
-                    </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Thinking toggle */}
+            <button
+              onClick={() => setIsThinking(!isThinking)}
+              disabled={!supportsThinking}
+              className={`thinking-toggle ${isThinking ? 'active' : ''}`}
+              title={supportsThinking ? 'Toggle thinking mode' : 'Not supported for this model'}
+            >
+              <BrainCircuit size={13} className={isThinking ? 'animate-pulse' : ''} />
+              <span className="hidden sm:inline">Think</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Messages */}
+        <main className="messages-area">
+          <div className="messages-inner">
+            {isWelcome ? (
+              <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
+                <div className="logo-icon w-14 h-14 mb-5 animate-float">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
+                  </svg>
+                </div>
+                <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>
+                  What can I help you with?
+                </h1>
+                <p className="text-sm mb-8 text-center max-w-sm" style={{ color: 'var(--text-muted)' }}>
+                  Powered by {selectedModelOption?.name || selectedModel}
+                </p>
+                <div className="welcome-grid w-full max-w-xl">
+                  {WELCOME_SUGGESTIONS.map((s, i) => (
+                    <div key={i} className="welcome-card" onClick={() => handleSubmit(s.text + ' ' + s.desc)}>
+                      <s.icon size={18} className="mb-2" style={{ color: 'var(--accent)' }} />
+                      <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{s.text}</div>
+                      <div className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{s.desc}</div>
+                    </div>
                   ))}
                 </div>
               </div>
+            ) : (
+              <>
+                {messages.map(msg => (
+                  <ChatMessage key={msg.id} message={msg} onRetry={msg.isError ? handleRetry : undefined} />
+                ))}
+                {isLoading && messages[messages.length - 1]?.text === '' && <TypingIndicator />}
+              </>
             )}
+            <div ref={messagesEndRef} className="h-4" />
           </div>
+        </main>
 
-          <button 
-            onClick={handleClearChat}
-            className="p-2.5 text-gray-400 hover:text-red-400 hover:bg-white/5 rounded-xl transition-all duration-200"
-            title="Clear Conversation"
-          >
-            <Trash2 size={20} />
-          </button>
-        </div>
-      </header>
-
-      {/* Chat Area */}
-      <main className="flex-1 overflow-y-auto px-4 py-6 md:px-6 scroll-smooth z-10 scrollbar-thin scrollbar-thumb-gray-800 scrollbar-track-transparent w-full">
-        <div className="max-w-3xl mx-auto flex flex-col min-h-full justify-end pb-4">
-          {/* Empty State - Only show if NO messages or only Welcome message and user explicitly wants to see placeholder */}
-          {messages.length === 1 && (
-            <div className="flex-1 flex flex-col items-center justify-center opacity-50 space-y-4 mb-20 animate-in fade-in duration-500">
-              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center">
-                <selectedPersona.icon size={32} className="text-indigo-400" />
-              </div>
-              <p className="text-gray-400">Start a conversation...</p>
-            </div>
-          )}
-
-          {messages.map(msg => (
-            <ChatMessage 
-              key={msg.id} 
-              message={msg} 
-              onRetry={msg.isError ? handleRetry : undefined}
-            />
-          ))}
-          
-          {isLoading && messages[messages.length - 1]?.text === '' && (
-             <div className="flex w-full mb-8 justify-start animate-in fade-in duration-300">
-                <div className="flex max-w-[85%] flex-row items-end gap-3">
-                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                    {isThinkingMode ? (
-                      <BrainCircuit size={14} className="text-indigo-400 animate-pulse" />
-                    ) : (
-                      <selectedPersona.icon size={14} className="text-indigo-400" />
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <TypingIndicator />
-                    {isThinkingMode && (
-                      <span className="text-xs font-medium text-indigo-300/80 animate-pulse tracking-wide">
-                        Thinking...
-                      </span>
-                    )}
-                  </div>
-                </div>
-             </div>
-          )}
-          <div ref={messagesEndRef} className="h-4" />
-        </div>
-      </main>
-
-      {/* Input Area */}
-      <footer className="flex-none p-4 md:p-6 pb-8 z-20 bg-gradient-to-t from-[#030712] via-[#030712] to-transparent w-full">
-        <div className="max-w-3xl mx-auto">
-          {/* Controls Bar */}
-          <div className="flex justify-center mb-4">
-            <button 
-              onClick={() => setIsThinkingMode(!isThinkingMode)}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium transition-all duration-300 border ${
-                isThinkingMode 
-                  ? 'bg-indigo-500/20 border-indigo-500/30 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]' 
-                  : 'bg-white/5 border-white/10 text-gray-400 hover:bg-white/10'
-              }`}
-            >
-              <BrainCircuit size={14} className={isThinkingMode ? "animate-pulse" : ""} />
-              <span>Thinking Mode</span>
-              <span className={`w-1.5 h-1.5 rounded-full ml-1 ${isThinkingMode ? 'bg-indigo-400' : 'bg-gray-600'}`} />
-            </button>
-          </div>
-
-          <div className="relative group">
-            <div className={`absolute -inset-0.5 rounded-[28px] opacity-30 blur transition duration-500 ${isThinkingMode ? 'bg-indigo-500' : 'bg-gradient-to-r from-gray-700 to-gray-600'}`}></div>
-            
-            <form onSubmit={handleSubmit} className="relative flex items-end gap-2 bg-[#13141f] border border-white/10 rounded-[26px] p-2 shadow-2xl">
-              
+        {/* Input */}
+        <div className="input-wrap">
+          <div className="input-inner">
+            <div className="input-container flex items-end gap-2 p-2">
               <textarea
                 ref={inputRef}
                 rows={1}
                 value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
+                onChange={handleInput}
                 onKeyDown={handleKeyDown}
-                placeholder={isListening ? "Listening..." : "Type your message..."}
-                className="w-full bg-transparent text-gray-100 border-none focus:ring-0 px-4 py-3 min-h-[52px] max-h-[150px] resize-none placeholder:text-gray-500"
-                disabled={isApiKeyMissing}
+                placeholder={isListening ? '🎙 Listening...' : 'Message NexusAI…'}
+                className="flex-1 px-3 py-2.5 min-h-[44px] max-h-[160px]"
               />
-              
-              <div className="flex items-center gap-1.5 pb-1.5 pr-1.5">
+              <div className="flex items-center gap-1 pb-1 pr-1">
                 <button
                   type="button"
                   onClick={toggleListening}
-                  disabled={isApiKeyMissing || isLoading}
-                  className={`p-2.5 rounded-full transition-all duration-200 ${
-                    isListening 
-                      ? "bg-red-500/20 text-red-400 animate-pulse" 
-                      : "text-gray-400 hover:text-white hover:bg-white/10"
+                  disabled={isLoading}
+                  className={`icon-btn transition-all ${
+                    isListening
+                      ? 'animate-pulse-glow'
+                      : ''
                   }`}
-                  title={isListening ? "Stop Recording" : "Voice Input"}
+                  style={isListening ? { color: '#ef4444', background: 'rgba(239,68,68,.1)' } : {}}
+                  title={isListening ? 'Stop' : 'Voice input'}
                 >
-                  {isListening ? <StopCircle size={20} /> : <Mic size={20} />}
+                  {isListening ? <StopCircle size={18} /> : <Mic size={18} />}
                 </button>
-
                 <button
-                  type="submit"
-                  disabled={!inputValue.trim() || isLoading || isApiKeyMissing}
-                  className={`p-2.5 rounded-full transition-all duration-200 shadow-lg ${
-                    !inputValue.trim() || isLoading
-                      ? 'bg-gray-800 text-gray-500 cursor-not-allowed'
-                      : isThinkingMode 
-                        ? 'bg-indigo-600 text-white hover:bg-indigo-500 shadow-indigo-500/20' 
-                        : 'bg-white text-gray-900 hover:bg-gray-100'
-                  }`}
+                  onClick={() => handleSubmit()}
+                  disabled={!inputValue.trim() || isLoading}
+                  className="btn-send"
                 >
-                  <Send size={18} fill={!inputValue.trim() ? "none" : "currentColor"} className={inputValue.trim() ? "translate-x-0.5" : ""} />
+                  <Send size={15} />
                 </button>
               </div>
-            </form>
-          </div>
-          
-          <div className="text-center mt-3">
-             <p className="text-[10px] text-gray-600 tracking-wide uppercase">
-              {isThinkingMode ? "GEMINI 3.0 PRO • THINKING ENABLED" : "GEMINI 2.5 FLASH • SPEED OPTIMIZED"}
-             </p>
+            </div>
+            <p className="text-[11px] text-center mt-2" style={{ color: 'var(--text-muted)' }}>
+              NexusAI can make mistakes. Verify important information.
+            </p>
           </div>
         </div>
-      </footer>
-
+      </div>
     </div>
   );
 };

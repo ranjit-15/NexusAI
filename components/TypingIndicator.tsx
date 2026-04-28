@@ -1,11 +1,20 @@
 import React from 'react';
+import { Bot } from 'lucide-react';
 
 const TypingIndicator: React.FC = () => {
   return (
-    <div className="flex items-center space-x-1.5 p-4 bg-white/5 backdrop-blur-sm rounded-2xl rounded-tl-none w-fit border border-white/5">
-      <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-      <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-      <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-bounce"></div>
+    <div className="flex items-start gap-3 animate-fade-in mb-4">
+      <div
+        className="w-8 h-8 rounded-full border flex items-center justify-center flex-shrink-0"
+        style={{ background: 'var(--bg-secondary)', borderColor: 'var(--border)' }}
+      >
+        <Bot size={14} style={{ color: 'var(--accent)' }} />
+      </div>
+      <div className="msg-bot py-3 flex items-center gap-1.5">
+        <div className="typing-dot" />
+        <div className="typing-dot" />
+        <div className="typing-dot" />
+      </div>
     </div>
   );
 };

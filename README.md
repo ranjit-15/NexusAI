@@ -1,20 +1,55 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# NexusAI — Free AI Chat Platform
 
-# Run and deploy your AI Studio app
+A modern, unrestricted AI chat platform built with React + Vite, powered by Google Gemini and Gemma models.
 
-This contains everything you need to run your app locally.
+## Features
 
-View your app in AI Studio: https://ai.studio/apps/drive/1wASSDYctQCznaXQvW7FTZs1duBkbCpoF
+- 🎨 Modern chat platform UI (sidebar, chat history, glassmorphism)
+- 🤖 Multiple AI models (Gemini 2.5 Pro, Flash, Gemma 4, etc.)
+- 🧠 Thinking mode for complex reasoning
+- 🎭 Persona system (Assistant, Developer, Creative, etc.)
+- 🎙 Voice input support
+- 🔊 Text-to-speech (read aloud)
+- 📋 Code syntax highlighting with copy
+- 💾 Chat history with auto-save
+- 📱 Fully responsive (mobile + desktop)
+- 🚫 No content restrictions
 
-## Run Locally
+## Local Development
 
-**Prerequisites:**  Node.js
+```bash
+# Install dependencies
+npm install
 
+# Start the API server
+npm run server
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+# Start the frontend dev server (in another terminal)
+npm run dev
+```
+
+Set your API key in `.env.local`:
+```
+GEMINI_API_KEY=your_key_here
+```
+
+## Deploy to Vercel
+
+1. Push to GitHub
+2. Connect repo to Vercel
+3. Add `GEMINI_API_KEY` as environment variable in Vercel dashboard
+4. Deploy
+
+## Deploy to Firebase
+
+```bash
+npm install -g firebase-tools
+firebase login
+firebase init hosting functions
+firebase deploy
+```
+
+Set the API key:
+```bash
+firebase functions:config:set gemini.api_key="your_key_here"
+```

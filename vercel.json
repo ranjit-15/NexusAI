@@ -1,13 +1,10 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "devCommand": "npm run dev",
-  "installCommand": "npm install",
   "framework": "vite",
   "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    }
+    { "source": "/api/chat", "destination": "/api/chat" },
+    { "source": "/api/models", "destination": "/api/models" },
+    { "source": "/api/tts", "destination": "/api/tts" }
   ]
 }
