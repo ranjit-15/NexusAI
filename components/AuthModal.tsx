@@ -66,7 +66,7 @@ export default function AuthModal({ onComplete }: AuthModalProps) {
             const profile = await loadProfileFromFirestore(val);
             return { exists: true, profile };
           })(),
-          6000
+          15000
         );
 
         if (result === null) {
