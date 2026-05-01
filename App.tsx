@@ -130,7 +130,7 @@ const App: React.FC = () => {
       setSessions(prev => {
         const updated = prev.map(s =>
           s.id === activeId
-            ? { ...s, title: getChatTitle(messages), updatedAt: Date.now(), messages }
+            ? { ...s, title: getChatTitle(messages), updatedAt: Date.now(), messages, model: selectedModel }
             : s
         );
         // Persist to Firestore in background
@@ -141,7 +141,7 @@ const App: React.FC = () => {
         return updated;
       });
     }
-  }, [messages]);
+  }, [messages, activeId]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -169,8 +169,10 @@ const App: React.FC = () => {
     geminiService.fetchAvailableModels().then(models => {
       if (!mounted) return;
       setAvailableModels(models);
-      if (models.length && !models.some(m => m.id === selectedModel))
-        setSelectedModel(models[0].id);
+      if (models.length && !models.some(m => m.id === selectedModel)) {
+        const hasFlash = models.some(m => m.id === 'gemini-2.5-flash');
+        setSelectedModel(hasFlash ? 'gemini-2.5-flash' : models[0].id);
+      }
     });
     return () => { mounted = false; };
   }, []);
@@ -190,6 +192,7 @@ const App: React.FC = () => {
   const selectSession = useCallback((session: ChatSession) => {
     setActiveId(session.id);
     setMessages(session.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
+    setSelectedModel(session.model || 'gemini-2.5-flash');
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 

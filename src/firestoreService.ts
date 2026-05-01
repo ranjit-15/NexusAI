@@ -35,10 +35,17 @@ function sessionsCol(deviceId: string) {
 }
 
 function serializeMessages(messages: Message[]) {
-  return messages.map(m => ({
-    ...m,
-    timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
-  }));
+  return messages.map(m => {
+    const serialized: any = {
+      id: m.id,
+      role: m.role,
+      text: m.text,
+      timestamp: m.timestamp instanceof Date ? m.timestamp.toISOString() : m.timestamp,
+    };
+    if (m.isError !== undefined) serialized.isError = m.isError;
+    if (m.model !== undefined) serialized.model = m.model;
+    return serialized;
+  });
 }
 
 function deserializeMessages(messages: any[]): Message[] {
