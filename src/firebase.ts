@@ -3,13 +3,13 @@ import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDePocjUVXcoX4pYQuLWDLOZP2UxHgWmsI",
-  authDomain: "gen-lang-client-0279971321.firebaseapp.com",
-  projectId: "gen-lang-client-0279971321",
-  storageBucket: "gen-lang-client-0279971321.firebasestorage.app",
-  messagingSenderId: "645379446760",
-  appId: "1:645379446760:web:444b6c72efdcc587e6765d",
-  measurementId: "G-XQP62GK54D",
+  apiKey: "AIzaSyCLcWl6Bb4oJEDoF-Y0AyeCfnf33HcPbtQ",
+  authDomain: "nexusais.firebaseapp.com",
+  projectId: "nexusais",
+  storageBucket: "nexusais.firebasestorage.app",
+  messagingSenderId: "391224641476",
+  appId: "1:391224641476:web:334165c8f764f91225c691",
+  measurementId: "G-508TWF9M3S"
 };
 
 const app = initializeApp(firebaseConfig);
