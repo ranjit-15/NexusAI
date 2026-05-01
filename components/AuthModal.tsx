@@ -8,6 +8,14 @@ interface AuthModalProps {
   onComplete: (profile: UserProfile) => void;
 }
 
+/** Race a promise against a timeout — resolves with null if it times out */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | null> {
+  return Promise.race([
+    promise,
+    new Promise<null>(resolve => setTimeout(() => resolve(null), ms)),
+  ]);
+}
+
 export default function AuthModal({ onComplete }: AuthModalProps) {
   const [mode, setMode] = useState<'create' | 'login'>('create');
   const [inputValue, setInputValue] = useState('');
@@ -17,7 +25,7 @@ export default function AuthModal({ onComplete }: AuthModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isLoading) return;
-    
+
     setError('');
     const val = inputValue.trim();
 
@@ -36,29 +44,53 @@ export default function AuthModal({ onComplete }: AuthModalProps) {
           username,
           createdAt: Date.now(),
         };
+
+        // Save locally FIRST — this is instant and always works
         saveUserProfile(profile);
-        await saveProfileToFirestore(profile);
+
+        // Fire-and-forget Firestore save with a 4s timeout
+        // If it times out or fails, user is still created locally
+        withTimeout(saveProfileToFirestore(profile), 4000).catch(err => {
+          console.warn('Firestore save failed or timed out:', err);
+        });
+
+        // Proceed immediately — don't wait for Firestore
         onComplete(profile);
+
       } else {
-        // Basic login by username
-        const exists = await checkUsernameExists(val);
-        if (!exists) {
-          setError('This username does not exist. Please check and try again.');
+        // Login — we NEED Firestore to verify the username exists
+        const result = await withTimeout(
+          (async () => {
+            const exists = await checkUsernameExists(val);
+            if (!exists) return { exists: false, profile: null };
+            const profile = await loadProfileFromFirestore(val);
+            return { exists: true, profile };
+          })(),
+          6000
+        );
+
+        if (result === null) {
+          setError('Connection timed out. Please check your internet and try again.');
           setIsLoading(false);
           return;
         }
 
-        const profile = await loadProfileFromFirestore(val);
-        if (profile) {
-          saveUserProfile(profile);
-          onComplete(profile);
+        if (!result.exists) {
+          setError('Username not found. Please check and try again, or create a new account.');
+          setIsLoading(false);
+          return;
+        }
+
+        if (result.profile) {
+          saveUserProfile(result.profile);
+          onComplete(result.profile);
         } else {
-          setError('Failed to load profile. Please try again.');
+          setError('Failed to load your profile. Please try again.');
         }
       }
     } catch (err) {
       console.error(err);
-      setError('An error occurred. Please try again.');
+      setError('Something went wrong. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -77,8 +109,8 @@ export default function AuthModal({ onComplete }: AuthModalProps) {
           {mode === 'create' ? 'Welcome to NexusAI' : 'Welcome back'}
         </h2>
         <p className="text-gray-400 text-center mb-8 text-sm">
-          {mode === 'create' 
-            ? 'Enter your name to get started. No sign up required.' 
+          {mode === 'create'
+            ? 'Enter your name to get started. No sign up required.'
             : 'Enter your unique username to access your chats.'}
         </p>
 
@@ -96,7 +128,7 @@ export default function AuthModal({ onComplete }: AuthModalProps) {
                 autoFocus
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
-                placeholder={mode === 'create' ? "e.g., Alex" : "e.g., alex_x7a9"}
+                placeholder={mode === 'create' ? 'e.g., Alex' : 'e.g., alex_x7a9'}
                 className="w-full pl-10 pr-4 py-3 bg-[#2a2a2a] border border-white/10 focus:border-[#10a37f] rounded-xl text-white outline-none transition-colors"
               />
             </div>
@@ -122,8 +154,8 @@ export default function AuthModal({ onComplete }: AuthModalProps) {
             }}
             className="text-sm text-gray-400 hover:text-white transition-colors"
           >
-            {mode === 'create' 
-              ? 'Already have a username? Login here' 
+            {mode === 'create'
+              ? 'Already have a username? Login here'
               : "Don't have a username? Create one"}
           </button>
         </div>

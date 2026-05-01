@@ -5,7 +5,10 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == resource.data.userId;
       allow create: if request.auth != null && request.resource.data.userId == request.auth.uid;
     }
-    match /guestSessions/{sessionId} {
+    match /guestSessions/{userId}/{document=**} {
+      allow read, write: if true;
+    }
+    match /userProfiles/{username} {
       allow read, write: if true;
     }
   }
