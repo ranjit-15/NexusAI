@@ -13,20 +13,22 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
+  getDoc,
+  type DocumentSnapshot,
+  type DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { ChatSession, Message, UserProfile } from '../types';
-import { getUserProfile } from './userService';
-import { getDoc } from 'firebase/firestore';
+import { ChatSession, Message } from '../types';
 
 // ── Device ID ──────────────────────────────────────────────────────────────
 
 export function getDeviceId(): string {
-  const profile = getUserProfile();
-  if (!profile || !profile.username) {
-    throw new Error('User profile not found. Cannot perform Firestore operations.');
+  let deviceId = localStorage.getItem('nexus_device_id');
+  if (!deviceId) {
+    deviceId = 'guest_' + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('nexus_device_id', deviceId);
   }
-  return profile.username;
+  return deviceId;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -57,40 +59,6 @@ function deserializeMessages(messages: any[]): Message[] {
 
 // ── CRUD ───────────────────────────────────────────────────────────────────
 
-/** Check if a username exists in userProfiles collection */
-export async function checkUsernameExists(username: string): Promise<boolean> {
-  try {
-    const profileRef = doc(db, 'userProfiles', username);
-    const snap = await getDoc(profileRef);
-    return snap.exists();
-  } catch (err) {
-    console.error('Error checking username:', err);
-    return false;
-  }
-}
-
-/** Save user profile to Firestore */
-export async function saveProfileToFirestore(profile: UserProfile): Promise<void> {
-  try {
-    const profileRef = doc(db, 'userProfiles', profile.username);
-    await setDoc(profileRef, profile);
-  } catch (err) {
-    console.error('Error saving profile to Firestore:', err);
-  }
-}
-
-/** Load user profile from Firestore */
-export async function loadProfileFromFirestore(username: string): Promise<UserProfile | null> {
-  try {
-    const profileRef = doc(db, 'userProfiles', username);
-    const snap = await getDoc(profileRef);
-    return snap.exists() ? (snap.data() as UserProfile) : null;
-  } catch (err) {
-    console.error('Error loading profile from Firestore:', err);
-    return null;
-  }
-}
-
 /** Save or update a single session in Firestore */
 export async function saveSession(session: ChatSession): Promise<void> {
   const deviceId = getDeviceId();
@@ -111,19 +79,19 @@ export async function loadSessionsFromFirestore(): Promise<ChatSession[]> {
   const snap = await getDocs(q);
 
   return snap.docs
-    .map(d => {
-      const data = d.data();
+    .map((d: DocumentSnapshot<DocumentData>) => {
+      const data = d.data() as DocumentData;
       return {
-        id: data.id || d.id,
-        title: data.title || 'New Chat',
-        updatedAt: data.updatedAt instanceof Timestamp
-          ? data.updatedAt.toMillis()
+        id: (data['id'] as string) || d.id,
+        title: (data['title'] as string) || 'New Chat',
+        updatedAt: data['updatedAt'] instanceof Timestamp
+          ? (data['updatedAt'] as Timestamp).toMillis()
           : Date.now(),
-        messages: deserializeMessages(data.messages || []),
-        model: data.model,
+        messages: deserializeMessages((data['messages'] as any[]) || []),
+        model: data['model'] as string | undefined,
       } as ChatSession;
     })
-    .filter(s => s.messages.length > 0)
+    .filter((s: ChatSession) => s.messages.length > 0)
     .slice(0, 50);
 }
 

@@ -1,21 +1,25 @@
-import React from 'react';
-import { Plus, MessageSquare, Trash2 } from 'lucide-react';
-import { ChatSession, UserProfile } from '../types';
+import React, { useState } from 'react';
+import { Plus, MessageSquare, Trash2, Search, X, Download } from 'lucide-react';
+import { ChatSession } from '../types';
 
 interface SidebarProps {
   sessions: ChatSession[];
   activeId: string | null;
   isOpen: boolean;
-  userProfile?: UserProfile | null;
   onClose: () => void;
   onNewChat: () => void;
   onSelectSession: (session: ChatSession) => void;
   onDeleteSession: (id: string) => void;
-  onOpenProfile: () => void;
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  showSearch: boolean;
+  onToggleSearch: () => void;
+  onExport: (session: ChatSession) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
-  sessions, activeId, isOpen, userProfile, onClose, onNewChat, onSelectSession, onDeleteSession, onOpenProfile
+  sessions, activeId, isOpen, onClose, onNewChat, onSelectSession, onDeleteSession,
+  searchQuery, onSearchChange, showSearch, onToggleSearch, onExport
 }) => {
   const grouped = groupByDate(sessions);
 
@@ -43,12 +47,41 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      {/* New Chat */}
-      <div className="px-3 pt-3 pb-1 flex-shrink-0">
-        <button onClick={onNewChat} className="new-chat-btn">
+      {/* New Chat + Search row */}
+      <div className="px-3 pt-3 pb-1 flex-shrink-0 flex items-center gap-2">
+        <button onClick={onNewChat} className="new-chat-btn flex-1">
           <span className="whitespace-nowrap">New chat</span>
         </button>
+        <button
+          onClick={onToggleSearch}
+          className="icon-btn flex-shrink-0"
+          title="Search chats"
+          style={showSearch ? { color: 'var(--accent)', background: 'var(--bg-hover)' } : {}}
+        >
+          <Search size={14} />
+        </button>
       </div>
+
+      {/* Search bar */}
+      {showSearch && (
+        <div className="px-3 pb-2 flex-shrink-0">
+          <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg" style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)' }}>
+            <Search size={12} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={e => onSearchChange(e.target.value)}
+              placeholder="Search chats..."
+              className="flex-1 text-xs bg-transparent outline-none"
+              style={{ color: 'var(--text-primary)' }}
+              autoFocus
+            />
+            {searchQuery && (
+              <button onClick={() => onSearchChange('')}><X size={11} style={{ color: 'var(--text-muted)' }} /></button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Chat List */}
       <div className="flex-1 overflow-y-auto px-2 py-2">
@@ -80,46 +113,34 @@ const Sidebar: React.FC<SidebarProps> = ({
                 >
                   {session.title}
                 </span>
-                <button
-                  onClick={e => { e.stopPropagation(); onDeleteSession(session.id); }}
-                  className="opacity-0 group-hover:opacity-100 p-1 rounded transition-all"
-                  style={{ color: 'var(--text-muted)' }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'; }}
-                  title="Delete"
-                >
-                  <Trash2 size={12} />
-                </button>
+                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-0.5">
+                  <button
+                    onClick={e => { e.stopPropagation(); onExport(session); }}
+                    className="p-1 rounded transition-all"
+                    style={{ color: 'var(--text-muted)' }}
+                    title="Export"
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'; }}
+                  >
+                    <Download size={11} />
+                  </button>
+                  <button
+                    onClick={e => { e.stopPropagation(); onDeleteSession(session.id); }}
+                    className="p-1 rounded transition-all"
+                    style={{ color: 'var(--text-muted)' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'; }}
+                    title="Delete"
+                  >
+                    <Trash2 size={11} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         ))}
       </div>
 
-      {/* Footer */}
-      <div className="px-3 py-3 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
-        <div 
-          className="flex items-center gap-2.5 px-2 py-1.5 cursor-pointer hover:bg-white/5 rounded-lg transition-colors"
-          onClick={onOpenProfile}
-        >
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
-            style={{ background: 'linear-gradient(135deg, #10a37f, #0d8063)' }}
-          >
-            <span className="text-xs font-bold text-white uppercase">
-              {userProfile?.displayName.charAt(0) || 'U'}
-            </span>
-          </div>
-          <div className="flex-1 min-w-0 overflow-hidden">
-            <div className="text-xs font-medium truncate whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
-              {userProfile?.displayName || 'User'}
-            </div>
-            <div className="text-[10px] whitespace-nowrap truncate" style={{ color: 'var(--text-muted)' }}>
-              @{userProfile?.username || 'Setup required'}
-            </div>
-          </div>
-        </div>
-      </div>
     </aside>
   );
 };

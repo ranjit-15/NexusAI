@@ -5,6 +5,9 @@ import { geminiService } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import 'katex/dist/katex.min.css';
 
 interface ChatMessageProps {
   message: Message;
@@ -143,6 +146,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
               </div>
             ) : (
               <ReactMarkdown
+                remarkPlugins={[remarkMath]}
+                rehypePlugins={[rehypeKatex]}
                 components={{
                   p: ({ children }) => <p className="mb-2 last:mb-0 break-words">{children}</p>,
                   ul: ({ children }) => <ul className="list-disc ml-4 mb-2 space-y-1">{children}</ul>,

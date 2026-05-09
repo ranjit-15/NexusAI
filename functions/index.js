@@ -1,8 +1,14 @@
 import { onRequest } from 'firebase-functions/v2/https';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { GoogleGenAI, HarmCategory, HarmBlockThreshold, Modality } from '@google/genai';
 import { defineString } from 'firebase-functions/params';
+import { getFirestore, Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
+import { initializeApp } from 'firebase-admin/app';
 
 const geminiApiKey = defineString('GEMINI_API_KEY');
+
+const adminApp = initializeApp();
+const adminDb = getFirestore(adminApp);
 
 const CURATED_MODELS = [
   { id: 'gemma-4-31b-it', name: 'Gemma 4 31B', description: 'Open model, flagship dense architecture', capabilities: ['text', 'thinking', 'image'] },
@@ -151,5 +157,43 @@ export const tts = onRequest({ cors: true, timeoutSeconds: 60 }, async (req, res
   } catch (err) {
     console.error('TTS error:', err);
     return res.status(500).json({ error: 'Failed to generate speech' });
+  }
+});
+
+/**
+ * Scheduled cleanup — runs every day at 02:00 UTC.
+ * Deletes any guest session that hasn't been updated in 30 days.
+ * This prevents orphaned Firestore data from users who cleared their browser.
+ */
+export const cleanupOldSessions = onSchedule('every 24 hours', async () => {
+  const cutoff = AdminTimestamp.fromMillis(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  try {
+    const guestsSnap = await adminDb.collection('guestSessions').listDocuments();
+
+    let totalDeleted = 0;
+    await Promise.all(
+      guestsSnap.map(async (guestRef) => {
+        const sessionsSnap = await guestRef
+          .collection('sessions')
+          .where('updatedAt', '<', cutoff)
+          .get();
+
+        const batch = adminDb.batch();
+        sessionsSnap.docs.forEach((d) => batch.delete(d.ref));
+        if (!sessionsSnap.empty) {
+          await batch.commit();
+          totalDeleted += sessionsSnap.size;
+        }
+
+        // If guest has NO sessions left, delete the guest document itself
+        const remaining = await guestRef.collection('sessions').limit(1).get();
+        if (remaining.empty) await guestRef.delete();
+      })
+    );
+
+    console.log(`✅ Cleanup complete — deleted ${totalDeleted} stale sessions`);
+  } catch (err) {
+    console.error('Cleanup error:', err);
   }
 });

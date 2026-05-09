@@ -1,16 +1,14 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Lightbulb, PenTool, Plus, Cloud, CloudOff, Image as ImageIcon } from 'lucide-react';
+import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Lightbulb, PenTool, Plus, Cloud, CloudOff, Image as ImageIcon, Key, Download, Search, Paperclip, X } from 'lucide-react';
 import { geminiService } from './services/geminiService';
 import { Message, Role, Persona, ModelOption, ChatSession } from './types';
 import { PERSONAS } from './constants/personas';
 import ChatMessage from './components/ChatMessage';
 import TypingIndicator from './components/TypingIndicator';
 import Sidebar from './components/Sidebar';
+import ApiKeyModal, { getStoredApiKey } from './components/ApiKeyModal';
+import ExportModal from './components/ExportModal';
 import { saveSession, loadSessionsFromFirestore, deleteSessionFromFirestore } from './src/firestoreService';
-import { getUserProfile } from './src/userService';
-import AuthModal from './components/AuthModal';
-import UserProfileModal from './components/UserProfileModal';
-import { UserProfile } from './types';
 
 const MODEL_KEY = 'nexus_model';
 
@@ -26,31 +24,6 @@ const getChatTitle = (msgs: Message[]): string => {
   return t.length > 50 ? t.slice(0, 50) + '…' : t;
 };
 
-// Local cache helpers (fast, offline fallback)
-const getSessionsKey = (username?: string) => `nexus_sessions_${username || 'guest'}`;
-
-const loadLocalSessions = (username?: string): ChatSession[] => {
-  try {
-    const raw = localStorage.getItem(getSessionsKey(username));
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((s: any) => ({
-        id: String(s.id || genId()),
-        title: String(s.title || 'New Chat'),
-        updatedAt: Number(s.updatedAt) || Date.now(),
-        messages: parseMessages(s.messages || []),
-        model: s.model,
-      }))
-      .filter((s: ChatSession) => s.messages.length > 0);
-  } catch { return []; }
-};
-
-const saveLocalSessions = (sessions: ChatSession[], username?: string) => {
-  localStorage.setItem(getSessionsKey(username), JSON.stringify(sessions.slice(0, 50)));
-};
-
 interface IWindow extends Window { webkitSpeechRecognition: any; SpeechRecognition: any; }
 
 const WELCOME_SUGGESTIONS = [
@@ -61,26 +34,30 @@ const WELCOME_SUGGESTIONS = [
 ];
 
 const App: React.FC = () => {
-  // Boot from local cache instantly; Firestore will merge in the background
-  const [userProfile, setUserProfile] = useState<UserProfile | null>(() => getUserProfile());
-  const [showProfileModal, setShowProfileModal] = useState(false);
-  const [sessions, setSessions] = useState<ChatSession[]>(() => loadLocalSessions(getUserProfile()?.username));
+  const deviceId = localStorage.getItem('nexus_device_id') || undefined;
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('syncing');
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<Persona>(PERSONAS[0]);
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>(
-    () => localStorage.getItem(MODEL_KEY) || 'gemini-2.5-flash'
-  );
+  const [selectedModel, setSelectedModel] = useState<string>('gemma-4-31b-it');
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   // Sidebar: open by default on desktop, closed on mobile
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => window.innerWidth >= 768);
+  // New feature states
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [exportSession, setExportSession] = useState<ChatSession | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -88,41 +65,35 @@ const App: React.FC = () => {
   const textBeforeListening = useRef('');
   const modelMenuRef = useRef<HTMLDivElement>(null);
   const personaMenuRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Register PWA service worker
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').catch(() => {});
+    }
+  }, []);
 
   // ── Theme initialization ────────────────────────────────────────────────
   useEffect(() => {
-    if (userProfile?.theme === 'light') {
-      document.documentElement.classList.add('light-theme');
-    } else {
-      document.documentElement.classList.remove('light-theme');
-    }
-  }, [userProfile?.theme]);
+    document.documentElement.classList.add('light-theme'); // default to light or dark based on your preference
+  }, []);
 
   // ── Firestore sync: load sessions on mount ──────────────────────────────
   useEffect(() => {
-    if (!userProfile) return; // Do not fetch if no user
-
     let mounted = true;
     setSyncStatus('syncing');
     loadSessionsFromFirestore()
       .then(firestoreSessions => {
         if (!mounted) return;
         setSessions(firestoreSessions);
-        saveLocalSessions(firestoreSessions, userProfile.username); // update local cache
         setSyncStatus('synced');
       })
       .catch(() => {
         if (mounted) setSyncStatus('error');
       });
     return () => { mounted = false; };
-  }, [userProfile]);
-
-  // ── Save to localStorage (instant) + Firestore (async) on sessions change ─
-  useEffect(() => {
-    saveLocalSessions(sessions, userProfile?.username);
-  }, [sessions, userProfile?.username]);
-
-  useEffect(() => { localStorage.setItem(MODEL_KEY, selectedModel); }, [selectedModel]);
+  }, [deviceId]);
 
   // Sync messages back to session and persist to Firestore
   useEffect(() => {
@@ -170,8 +141,8 @@ const App: React.FC = () => {
       if (!mounted) return;
       setAvailableModels(models);
       if (models.length && !models.some(m => m.id === selectedModel)) {
-        const hasFlash = models.some(m => m.id === 'gemini-2.5-flash');
-        setSelectedModel(hasFlash ? 'gemini-2.5-flash' : models[0].id);
+        const hasGemma = models.some(m => m.id === 'gemma-4-31b-it');
+        setSelectedModel(hasGemma ? 'gemma-4-31b-it' : models[0].id);
       }
     });
     return () => { mounted = false; };
@@ -192,7 +163,7 @@ const App: React.FC = () => {
   const selectSession = useCallback((session: ChatSession) => {
     setActiveId(session.id);
     setMessages(session.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
-    setSelectedModel(session.model || 'gemini-2.5-flash');
+    setSelectedModel(session.model || 'gemma-4-31b-it');
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
@@ -248,6 +219,14 @@ const App: React.FC = () => {
     rec.start();
   };
 
+  const stopGeneration = () => {
+    if (abortController) {
+      abortController.abort();
+      setAbortController(null);
+      setIsLoading(false);
+    }
+  };
+
   const handleRetry = async (errorMsgId: string) => {
     const idx = messages.findIndex(m => m.id === errorMsgId);
     if (idx === -1) return;
@@ -281,6 +260,8 @@ const App: React.FC = () => {
     const userText = (typeof textOrEvent === 'string' ? textOrEvent : inputValue).trim();
     if (!userText || isLoading) return;
     setInputValue('');
+    setImageFile(null);
+    setImagePreview(null);
 
     const userMsg: Message = { id: genId(), role: Role.USER, text: userText, timestamp: new Date() };
     const botId = genId();
@@ -291,14 +272,24 @@ const App: React.FC = () => {
     setMessages(newMessages);
 
     if (!activeId) {
-      createSessionFromMessages([...currentHistory, userMsg, botMsg]);
+      const newSessionId = createSessionFromMessages([...currentHistory, userMsg, botMsg]);
+      fetch('/api/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: userText }) })
+        .then(r => r.json())
+        .then(d => {
+          if (d.title) setSessions(prev => prev.map(s => s.id === newSessionId ? { ...s, title: d.title } : s));
+        }).catch(() => {});
     }
 
     setIsLoading(true);
+    const controller = new AbortController();
+    setAbortController(controller);
+
+    // Pass user's custom API key if available
+    const userApiKey = getStoredApiKey();
 
     try {
       const stream = geminiService.sendMessageStream(
-        userText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction
+        userText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey
       );
       let full = '';
       for await (const chunk of stream) {
@@ -306,8 +297,12 @@ const App: React.FC = () => {
         setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: full } : m));
       }
     } catch (err: any) {
+      if (err.name === 'AbortError') return;
       setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: err.message || 'Error occurred', isError: true } : m));
-    } finally { setIsLoading(false); }
+    } finally { 
+      setIsLoading(false); 
+      setAbortController(null);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -323,33 +318,44 @@ const App: React.FC = () => {
 
   const selectedModelOption = availableModels.find(m => m.id === selectedModel);
   const isWelcome = messages.length === 0;
+  const activeSession = sessions.find(s => s.id === activeId) || null;
+
+  // Filtered sessions for search
+  const filteredSessions = searchQuery.trim()
+    ? sessions.filter(s =>
+        s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        s.messages.some(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    : sessions;
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageFile(file);
+    const reader = new FileReader();
+    reader.onload = ev => setImagePreview(ev.target?.result as string);
+    reader.readAsDataURL(file);
+  };
 
   return (
     <div className="app-shell">
-      {!userProfile && (
-        <AuthModal onComplete={(profile) => setUserProfile(profile)} />
-      )}
-      
-      {showProfileModal && userProfile && (
-        <UserProfileModal 
-          profile={userProfile} 
-          onClose={() => setShowProfileModal(false)}
-          onUpdate={(profile) => setUserProfile(profile)}
-          onDeleteAllChats={deleteAllChats}
-        />
-      )}
+      {showApiKeyModal && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
+      {exportSession && <ExportModal session={exportSession} onClose={() => setExportSession(null)} />}
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <Sidebar
-        sessions={sessions}
+        sessions={filteredSessions}
         activeId={activeId}
         isOpen={sidebarOpen}
-        userProfile={userProfile}
         onClose={() => setSidebarOpen(false)}
         onNewChat={startNewChat}
         onSelectSession={selectSession}
         onDeleteSession={deleteSession}
-        onOpenProfile={() => setShowProfileModal(true)}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
+        showSearch={showSearch}
+        onToggleSearch={() => setShowSearch(v => !v)}
+        onExport={session => setExportSession(session)}
       />
 
       {/* Mobile overlay */}
@@ -466,6 +472,27 @@ const App: React.FC = () => {
               <BrainCircuit size={13} className={isThinking ? 'animate-pulse' : ''} />
               <span className="hidden sm:inline">Think</span>
             </button>
+
+            {/* Export button (only when chat active) */}
+            {activeSession && (
+              <button
+                onClick={() => setExportSession(activeSession)}
+                className="icon-btn"
+                title="Export chat"
+              >
+                <Download size={15} />
+              </button>
+            )}
+
+            {/* API Key button */}
+            <button
+              onClick={() => setShowApiKeyModal(true)}
+              className="icon-btn"
+              title="API Key Settings"
+              style={getStoredApiKey() ? { color: '#10a37f' } : {}}
+            >
+              <Key size={15} />
+            </button>
           </div>
         </header>
 
@@ -508,7 +535,33 @@ const App: React.FC = () => {
         {/* Input */}
         <div className="input-wrap">
           <div className="input-inner">
+            {/* Image preview strip */}
+            {imagePreview && (
+              <div className="flex items-center gap-2 px-3 pt-2">
+                <div className="relative">
+                  <img src={imagePreview} alt="attachment" className="h-16 rounded-lg border" style={{ borderColor: 'var(--border)' }} />
+                  <button
+                    onClick={() => { setImageFile(null); setImagePreview(null); }}
+                    className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full flex items-center justify-center"
+                    style={{ background: '#ef4444' }}
+                  >
+                    <X size={9} className="text-white" />
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="input-container flex items-end gap-2 p-2">
+              {/* Hidden file input */}
+              <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isLoading}
+                className="icon-btn flex-shrink-0"
+                title="Attach image"
+              >
+                <Paperclip size={17} />
+              </button>
               <textarea
                 ref={inputRef}
                 rows={1}
@@ -519,6 +572,15 @@ const App: React.FC = () => {
                 className="flex-1 px-3 py-2.5 min-h-[44px] max-h-[160px]"
               />
               <div className="flex items-center gap-1 pb-1 pr-1">
+                {isLoading ? (
+                  <button
+                    onClick={stopGeneration}
+                    className="p-1.5 text-gray-400 hover:text-red-400 transition-colors bg-red-400/10 hover:bg-red-400/20 rounded-lg mr-1"
+                    title="Stop generating"
+                  >
+                    <StopCircle size={15} />
+                  </button>
+                ) : null}
                 <button
                   type="button"
                   onClick={toggleListening}
