@@ -20,7 +20,9 @@ const CopyButton = ({ text }: { text: string }) => {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {}
+    } catch (err) {
+      console.warn('Copy failed:', err);
+    }
   };
   return (
     <button onClick={handleCopy} className="p-1 text-gray-500 hover:text-purple-300 rounded transition-colors" title="Copy">

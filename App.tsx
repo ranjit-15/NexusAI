@@ -614,35 +614,37 @@ const App: React.FC = () => {
             <div className="input-container flex items-end gap-2 p-2">
               {/* Hidden file input */}
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-              {/* Attach image */}
-              <button
-                type="button"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isLoading}
-                className="icon-btn flex-shrink-0"
-                title="Attach image"
-              >
-                <Paperclip size={17} />
-              </button>
-              {/* Think toggle — small circle next to attach */}
-              <button
-                onClick={() => setIsThinking(!isThinking)}
-                disabled={!supportsThinking || isLoading}
-                title={supportsThinking ? (isThinking ? 'Thinking ON — click to disable' : 'Enable thinking mode') : 'Not supported for this model'}
-                className="flex-shrink-0 self-center flex items-center justify-center rounded-full transition-all"
-                style={{
-                  width: 28,
-                  height: 28,
-                  background: isThinking
-                    ? 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.3))'
-                    : 'var(--bg-tertiary)',
-                  border: `1px solid ${isThinking ? 'rgba(99,102,241,0.5)' : 'var(--border)'}`,
-                  color: isThinking ? '#818cf8' : 'var(--text-muted)',
-                  boxShadow: isThinking ? '0 0 8px rgba(99,102,241,0.3)' : 'none',
-                }}
-              >
-                <BrainCircuit size={13} className={isThinking ? 'animate-pulse' : ''} />
-              </button>
+              {/* Attach + Think: stacked so they align neatly on the left */}
+              <div className="flex flex-col items-center gap-1 flex-shrink-0 self-center">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isLoading}
+                  className="icon-btn"
+                  title="Attach image"
+                >
+                  <Paperclip size={17} />
+                </button>
+                {/* Think toggle — small circle below paperclip */}
+                <button
+                  onClick={() => setIsThinking(!isThinking)}
+                  disabled={!supportsThinking || isLoading}
+                  title={supportsThinking ? (isThinking ? 'Thinking ON — click to disable' : 'Enable thinking mode') : 'Not supported for this model'}
+                  className="flex items-center justify-center rounded-full transition-all"
+                  style={{
+                    width: 26,
+                    height: 26,
+                    background: isThinking
+                      ? 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.3))'
+                      : 'var(--bg-tertiary)',
+                    border: `1px solid ${isThinking ? 'rgba(99,102,241,0.5)' : 'var(--border)'}`,
+                    color: isThinking ? '#818cf8' : 'var(--text-muted)',
+                    boxShadow: isThinking ? '0 0 8px rgba(99,102,241,0.3)' : 'none',
+                  }}
+                >
+                  <BrainCircuit size={12} className={isThinking ? 'animate-pulse' : ''} />
+                </button>
+              </div>
               <textarea
                 ref={inputRef}
                 rows={1}

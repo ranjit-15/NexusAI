@@ -97,7 +97,7 @@ ${text}
 }
 
 const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
-  const [style, setStyle] = useState('casual');
+  const [style, setStyle] = useState('student');
   const [tone, setTone] = useState('neutral');
   const [inputText, setInputText] = useState(text || '');
   const [opts, setOpts] = useState<AdvOpts>({
