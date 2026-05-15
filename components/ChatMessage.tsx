@@ -55,7 +55,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
       return;
     }
 
-    // Strip markdown syntax for cleaner speech
+    // Strip markdown for clean speech output
     const plainText = message.text
       .replace(/```[\s\S]*?```/g, 'code block')
       .replace(/`([^`]+)`/g, '$1')
@@ -66,23 +66,33 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
       .replace(/!\[([^\]]*)\]\([^)]+\)/g, '')
       .trim();
 
-    const utterance = new SpeechSynthesisUtterance(plainText);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+    const speak = (voices: SpeechSynthesisVoice[]) => {
+      const utterance = new SpeechSynthesisUtterance(plainText);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+      utterance.volume = 1.0;
+      const preferred = voices.find(v => v.lang === 'en-US' && v.localService) ||
+                        voices.find(v => v.lang.startsWith('en-'));
+      if (preferred) utterance.voice = preferred;
+      utterance.onend = () => setIsPlaying(false);
+      utterance.onerror = () => setIsPlaying(false);
+      utteranceRef.current = utterance;
+      window.speechSynthesis.speak(utterance);
+      setIsPlaying(true);
+    };
 
-    // Prefer a natural-sounding English voice if available
+    // Voices may not be loaded yet on first call — wait if needed
     const voices = window.speechSynthesis.getVoices();
-    const preferred = voices.find(v => v.lang === 'en-US' && v.localService) ||
-                      voices.find(v => v.lang.startsWith('en'));
-    if (preferred) utterance.voice = preferred;
-
-    utterance.onend = () => setIsPlaying(false);
-    utterance.onerror = () => setIsPlaying(false);
-
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-    setIsPlaying(true);
+    if (voices.length > 0) {
+      speak(voices);
+    } else {
+      window.speechSynthesis.onvoiceschanged = () => {
+        speak(window.speechSynthesis.getVoices());
+        window.speechSynthesis.onvoiceschanged = null;
+      };
+      // Trigger voice loading (some browsers need this)
+      window.speechSynthesis.getVoices();
+    }
   };
 
   if (message.id === 'welcome') return null;
@@ -227,14 +237,15 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                 </ReactMarkdown>
               )}
 
-              {/* Action buttons for bot messages */}
+              {/* Action buttons for bot messages — always visible */}
               {!isUser && !message.isError && message.text && (
-                <div className="flex items-center gap-1 mt-2 pt-2 opacity-0 group-hover:opacity-100 transition-opacity" style={{ borderTop: '1px solid var(--border)' }}>
+                <div className="flex items-center gap-1 mt-2 pt-2" style={{ borderTop: '1px solid var(--border)' }}>
                   <CopyButton text={message.text} />
-                  {/* Read Aloud — instant browser TTS, no API call */}
+                  {/* Read Aloud — instant browser TTS */}
                   <button
                     onClick={handlePlayAudio}
-                    className="p-1 text-gray-500 hover:text-purple-300 rounded transition-colors"
+                    className="p-1 rounded transition-colors"
+                    style={{ color: isPlaying ? 'var(--accent)' : 'var(--text-muted)' }}
                     title={isPlaying ? 'Stop reading' : 'Read aloud'}
                   >
                     {isPlaying ? <StopCircle size={13} /> : <Volume2 size={13} />}
@@ -242,11 +253,12 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                   {/* Humanize button */}
                   <button
                     onClick={() => setShowHumanize(true)}
-                    className="flex items-center gap-1 p-1 text-gray-500 hover:text-violet-400 rounded transition-colors text-[11px]"
-                    title="Humanize — convert AI text to human writing"
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium transition-all"
+                    style={{ color: '#8b5cf6', background: 'rgba(139,92,246,0.08)', border: '1px solid rgba(139,92,246,0.2)' }}
+                    title="Humanize — rewrite as natural human text"
                   >
-                    <Wand2 size={13} />
-                    <span className="hidden sm:inline">Humanize</span>
+                    <Wand2 size={12} />
+                    <span>Humanize</span>
                   </button>
                 </div>
               )}

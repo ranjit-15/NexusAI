@@ -12,6 +12,27 @@ import { saveSession, loadSessionsFromFirestore, deleteSessionFromFirestore } fr
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
 
+// Resize image to max 800px and return as base64 data URL (keeps images under Vercel's 4.5MB limit)
+const resizeImage = (file: File, maxPx = 800): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = ev => {
+      const img = new Image();
+      img.onerror = reject;
+      img.onload = () => {
+        const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * scale);
+        canvas.height = Math.round(img.height * scale);
+        canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = ev.target!.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+
 const getChatTitle = (msgs: Message[]): string => {
   const first = msgs.find(m => m.role === Role.USER && m.text?.trim());
   if (!first) return 'New Chat';
@@ -342,13 +363,25 @@ const App: React.FC = () => {
       )
     : sessions;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    // Reset so same file can be re-selected
+    e.target.value = '';
     setImageFile(file);
-    const reader = new FileReader();
-    reader.onload = ev => setImagePreview(ev.target?.result as string);
-    reader.readAsDataURL(file);
+    try {
+      // Resize to max 800px — keeps payload under Vercel's 4.5MB body limit
+      const resized = await resizeImage(file);
+      setImagePreview(resized);
+      // Auto-switch to a vision-capable model when image is attached
+      if (!selectedModel.includes('gemini-2') && !selectedModel.includes('gemma-4')) {
+        setSelectedModel('gemini-2.0-flash');
+      }
+    } catch {
+      const reader = new FileReader();
+      reader.onload = ev => setImagePreview(ev.target?.result as string);
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
