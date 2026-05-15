@@ -11,6 +11,7 @@ import 'katex/dist/katex.min.css';
 interface ChatMessageProps {
   message: Message;
   onRetry?: (id: string) => void;
+  isLast?: boolean;
 }
 
 const CopyButton = ({ text }: { text: string }) => {
@@ -31,7 +32,7 @@ const CopyButton = ({ text }: { text: string }) => {
   );
 };
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry, isLast }) => {
   const isUser = message.role === Role.USER;
   const [isPlaying, setIsPlaying] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -252,6 +253,16 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                   >
                     {isPlaying ? <StopCircle size={13} /> : <Volume2 size={13} />}
                   </button>
+                  {/* Regenerate (only if it's the last message) */}
+                  {isLast && onRetry && (
+                    <button
+                      onClick={() => onRetry(message.id)}
+                      className="p-1 text-gray-500 hover:text-purple-300 rounded transition-colors"
+                      title="Regenerate response"
+                    >
+                      <RefreshCw size={13} />
+                    </button>
+                  )}
                   {/* Word count of this message */}
                   <span className="ml-auto text-[10px]" style={{ color: 'var(--text-muted)' }}>
                     {message.text.trim().split(/\s+/).filter(Boolean).length} words

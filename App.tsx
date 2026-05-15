@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Image as ImageIcon, Key, Download, Search, Paperclip, X, PenTool } from 'lucide-react';
+import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Image as ImageIcon, Key, Download, Search, Paperclip, X, PenTool, Sun, Moon } from 'lucide-react';
 import { geminiService } from './services/geminiService';
 import { Message, Role, Persona, ModelOption, ChatSession } from './types';
 import { PERSONAS } from './constants/personas';
@@ -93,10 +93,16 @@ const App: React.FC = () => {
     }
   }, []);
 
+  const [isDarkTheme, setIsDarkTheme] = useState(true);
+
   // ── Theme initialization ────────────────────────────────────────────────
   useEffect(() => {
-    document.documentElement.classList.add('light-theme'); // default to light or dark based on your preference
-  }, []);
+    if (isDarkTheme) {
+      document.documentElement.classList.remove('light-theme');
+    } else {
+      document.documentElement.classList.add('light-theme');
+    }
+  }, [isDarkTheme]);
 
   // ── Firestore sync: load sessions on mount ──────────────────────────────
   useEffect(() => {
@@ -277,9 +283,15 @@ const App: React.FC = () => {
   const handleSubmit = async (textOrEvent?: string | React.MouseEvent) => {
     if (isListening) toggleListening();
     const userText = (typeof textOrEvent === 'string' ? textOrEvent : inputValue).trim();
-    // Allow submission if there's text OR an image attached
     if ((!userText && !imageFile) || isLoading) return;
     
+    let actualThinking = isThinking;
+    const complexKeywords = ['explain', 'why', 'how', 'architecture', 'math', 'complex', 'debug', 'code', 'script'];
+    if (!actualThinking && supportsThinking && complexKeywords.some(kw => userText.toLowerCase().includes(kw))) {
+        actualThinking = true;
+        setIsThinking(true);
+    }
+
     const finalText = userText || (imageFile ? `[Image: ${imageFile.name}]` : '');
     const attachedImagePreview = imagePreview;
     
@@ -319,7 +331,7 @@ const App: React.FC = () => {
 
     try {
       const stream = geminiService.sendMessageStream(
-        finalText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
+        finalText, actualThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
       );
       let full = '';
       for await (const chunk of stream) {
@@ -336,7 +348,29 @@ const App: React.FC = () => {
         setMessages(prev => prev.filter(m => m.id !== botId));
         return;
       }
-      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: getReadableError(err.message || ''), isError: true } : m));
+      const errMsg = err.message || '';
+      
+      // Graceful fallback to gemma-4-31b-it if we hit a 429 on free tier gemini models
+      if ((errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) && selectedModel !== 'gemma-4-31b-it' && !userApiKey) {
+        try {
+          setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: 'API quota full, automatically retrying with a fallback model...' } : m));
+          const stream = geminiService.sendMessageStream(
+            finalText, actualThinking, currentHistory, 'gemma-4-31b-it', selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
+          );
+          let full = '';
+          for await (const chunk of stream) {
+            full += chunk;
+            setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: full } : m));
+          }
+          if (!full) throw new Error('Fallback returned empty response');
+          return;
+        } catch (fallbackErr: any) {
+          setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: getReadableError(fallbackErr.message || ''), isError: true } : m));
+          return;
+        }
+      }
+
+      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: getReadableError(errMsg), isError: true } : m));
     } finally { 
       setIsLoading(false); 
       setAbortController(null);
@@ -555,6 +589,15 @@ const App: React.FC = () => {
               </button>
             )}
 
+            {/* Theme Toggle */}
+            <button
+              onClick={() => setIsDarkTheme(!isDarkTheme)}
+              className="icon-btn"
+              title={isDarkTheme ? "Switch to Light Mode" : "Switch to Dark Mode"}
+            >
+              {isDarkTheme ? <Sun size={15} /> : <Moon size={15} />}
+            </button>
+
             {/* API Key button */}
             <button
               onClick={() => setShowApiKeyModal(true)}
@@ -593,8 +636,13 @@ const App: React.FC = () => {
               </div>
             ) : (
               <>
-                {messages.map(msg => (
-                  <ChatMessage key={msg.id} message={msg} onRetry={msg.isError ? handleRetry : undefined} />
+                {messages.map((msg, index) => (
+                  <ChatMessage 
+                    key={msg.id} 
+                    message={msg} 
+                    onRetry={handleRetry} 
+                    isLast={index === messages.length - 1} 
+                  />
                 ))}
                 {isLoading && <TypingIndicator />}
               </>
@@ -605,6 +653,23 @@ const App: React.FC = () => {
 
         {/* Input */}
         <div className="input-wrap">
+          {/* Quick Shortcuts / Prompt Templates */}
+          {!isWelcome && !isLoading && (
+            <div className="flex items-center gap-2 px-4 pb-2 overflow-x-auto no-scrollbar">
+              {WELCOME_SUGGESTIONS.map(s => (
+                <button 
+                  key={s.text}
+                  onClick={() => handleSubmit(`${s.text} ${s.desc}`)}
+                  className="px-3 py-1.5 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors"
+                  style={{ background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', border: '1px solid var(--border)' }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-hover)'; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-tertiary)'; }}
+                >
+                  {s.text}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="input-inner">
             {/* Image preview strip */}
             {imagePreview && (
