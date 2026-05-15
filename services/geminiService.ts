@@ -1,20 +1,11 @@
 import { Message, ModelOption, Role } from '../types';
 
-// Ordered: Gemma first (default), then Gemini newest to oldest
+// Ordered: Most commonly used first
 const FALLBACK_MODELS: ModelOption[] = [
-  // ── Gemma 4 (Open Models — DEFAULT) ──
-  { id: 'gemma-4-31b-it', name: 'Gemma 4 31B', description: 'Open model, flagship dense architecture ✦ Default', capabilities: ['text', 'thinking', 'image'] },
-  { id: 'gemma-4-26b-a4b-it', name: 'Gemma 4 26B MoE', description: 'Open model, efficient mixture-of-experts', capabilities: ['text', 'thinking', 'image'] },
-  // ── Gemini 3.1 (Latest) ──
-  { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', description: 'Most advanced — complex reasoning & agentic tasks', capabilities: ['text', 'thinking'] },
-  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'Frontier performance at fraction of cost', capabilities: ['text', 'thinking'] },
-  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', description: 'Ultra fast, budget-friendly 3.1 model', capabilities: ['text', 'thinking'] },
-  // ── Gemini 2.5 (Stable) ──
-  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Deep reasoning and coding capabilities', capabilities: ['text', 'thinking'] },
-  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Best price-performance with reasoning', capabilities: ['text', 'thinking'] },
-  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fastest and most budget-friendly 2.5 model', capabilities: ['text', 'thinking'] },
-  // ── Gemini 2.0 (Legacy) ──
-  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Previous gen workhorse, 1M context', capabilities: ['text'] },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Best price-performance ✦ Default', capabilities: ['text'] },
+  { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Deep reasoning and complex tasks', capabilities: ['text'] },
+  { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Previous gen workhorse', capabilities: ['text'] },
+  { id: 'gemini-2.0-flash-thinking-exp-01-21', name: 'Gemini 2.0 Flash Thinking', description: 'Experimental thinking model', capabilities: ['text', 'thinking'] },
   // ── Image Generation ──
   { id: 'image-generator', name: 'Image Generator (Pico)', description: 'Generate high quality images from text', capabilities: ['image'] },
 ];

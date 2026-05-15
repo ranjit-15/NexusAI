@@ -65,7 +65,7 @@ const App: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<Persona>(PERSONAS[0]);
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('gemma-4-31b-it');
+  const [selectedModel, setSelectedModel] = useState<string>('gemini-2.5-flash');
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   // Sidebar: open by default on desktop, closed on mobile
@@ -166,16 +166,16 @@ const App: React.FC = () => {
       if (!mounted) return;
       setAvailableModels(models);
       if (models.length && !models.some(m => m.id === selectedModel)) {
-        const hasGemma = models.some(m => m.id === 'gemma-4-31b-it');
-        setSelectedModel(hasGemma ? 'gemma-4-31b-it' : models[0].id);
+        const hasGemini = models.some(m => m.id === 'gemini-2.5-flash');
+        setSelectedModel(hasGemini ? 'gemini-2.5-flash' : models[0].id);
       }
     });
     return () => { mounted = false; };
   }, []);
 
   // Thinking mode guard
-  const supportsThinking = selectedModel.startsWith('gemini') || selectedModel.startsWith('gemma');
-  useEffect(() => { if (!supportsThinking && isThinking) setIsThinking(false); }, [supportsThinking]);
+  const supportsThinking = selectedModel.includes('thinking');
+  useEffect(() => { if (!supportsThinking && isThinking) setIsThinking(false); }, [supportsThinking, isThinking]);
 
   const startNewChat = useCallback(() => {
     setActiveId(null);
@@ -188,7 +188,7 @@ const App: React.FC = () => {
   const selectSession = useCallback((session: ChatSession) => {
     setActiveId(session.id);
     setMessages(session.messages.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
-    setSelectedModel(session.model || 'gemma-4-31b-it');
+    setSelectedModel(session.model || 'gemini-2.5-flash');
     if (window.innerWidth < 768) setSidebarOpen(false);
   }, []);
 
@@ -348,7 +348,7 @@ const App: React.FC = () => {
         try {
           setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: 'API quota full, automatically retrying with a fallback model...' } : m));
           const stream = geminiService.sendMessageStream(
-            finalText, isThinking, currentHistory, 'gemma-4-31b-it', selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
+            finalText, isThinking, currentHistory, 'gemini-2.5-flash', selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
           );
           let full = '';
           for await (const chunk of stream) {
