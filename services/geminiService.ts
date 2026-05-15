@@ -36,7 +36,8 @@ export class GeminiService {
     model: string,
     customSystemInstruction?: string,
     signal?: AbortSignal,
-    userApiKey?: string
+    userApiKey?: string,
+    imageUrl?: string | null
   ): AsyncGenerator<string, void, unknown> {
     const history = this.formatHistory(previousMessages);
 
@@ -67,6 +68,7 @@ export class GeminiService {
       thinking: isThinkingMode,
       model,
       apiKey: userApiKey,
+      image: imageUrl,
     };
 
     const response = await fetch('/api/chat', {
@@ -106,13 +108,11 @@ export class GeminiService {
     if (data.text) yield data.text;
   }
 
-  public async generateSpeech(text: string): Promise<string> {
-    let apiKey = undefined;
-
+  public async generateSpeech(text: string, userApiKey?: string): Promise<string> {
     const response = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, apiKey }),
+      body: JSON.stringify({ text, apiKey: userApiKey }),
     });
 
     if (!response.ok) {

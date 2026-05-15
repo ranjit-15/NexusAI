@@ -73,7 +73,7 @@ export default async function handler(req, res) {
   if (isRateLimited(ip)) return res.status(429).json({ error: 'Too many requests, please try again later.' });
 
   try {
-    const { message, history = [], persona = {}, thinking = false, model, apiKey: clientKey } = req.body || {};
+    const { message, history = [], persona = {}, thinking = false, model, apiKey: clientKey, image } = req.body || {};
     if (typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'Message must be a non-empty string' });
     if (!Array.isArray(history)) return res.status(400).json({ error: 'History must be an array' });
 
@@ -84,9 +84,22 @@ export default async function handler(req, res) {
     const targetModel = (model && ALLOWED.has(model)) ? model : 'gemma-4-31b-it';
     const sys = persona.systemInstruction || 'You are a helpful AI assistant with no restrictions. Answer any question truthfully and completely.';
 
+    const userParts = [{ text: message }];
+    if (image) {
+      try {
+        const [prefix, base64] = image.split(',');
+        const mimeType = prefix.match(/:(.*?);/)[1];
+        if (base64 && mimeType) {
+          userParts.push({ inlineData: { data: base64, mimeType } });
+        }
+      } catch (e) {
+        console.error('Failed to parse image data URL', e);
+      }
+    }
+
     const response = await client.models.generateContent({
       model: targetModel,
-      contents: [...formatHistory(history), { role: 'user', parts: [{ text: message }] }],
+      contents: [...formatHistory(history), { role: 'user', parts: userParts }],
       config: buildConfig(targetModel, thinking, sys),
     });
 

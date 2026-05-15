@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Message, Role } from '../types';
 import { User, Bot, AlertCircle, Volume2, StopCircle, Loader2, Copy, Check, RefreshCw, Download } from 'lucide-react';
 import { geminiService } from '../services/geminiService';
+import { getStoredApiKey } from './ApiKeyModal';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -71,7 +72,8 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
     }
     try {
       setIsAudioLoading(true);
-      const b64 = await geminiService.generateSpeech(message.text);
+      const userApiKey = getStoredApiKey() || undefined;
+      const b64 = await geminiService.generateSpeech(message.text, userApiKey);
       const AC = window.AudioContext || (window as any).webkitAudioContext;
       if (!audioCtxRef.current) audioCtxRef.current = new AC({ sampleRate: 24000 });
       else if (audioCtxRef.current.state === 'suspended') await audioCtxRef.current.resume();
