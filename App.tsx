@@ -285,13 +285,6 @@ const App: React.FC = () => {
     const userText = (typeof textOrEvent === 'string' ? textOrEvent : inputValue).trim();
     if ((!userText && !imageFile) || isLoading) return;
     
-    let actualThinking = isThinking;
-    const complexKeywords = ['explain', 'why', 'how', 'architecture', 'math', 'complex', 'debug', 'code', 'script'];
-    if (!actualThinking && supportsThinking && complexKeywords.some(kw => userText.toLowerCase().includes(kw))) {
-        actualThinking = true;
-        setIsThinking(true);
-    }
-
     const finalText = userText || (imageFile ? `[Image: ${imageFile.name}]` : '');
     const attachedImagePreview = imagePreview;
     
@@ -331,7 +324,7 @@ const App: React.FC = () => {
 
     try {
       const stream = geminiService.sendMessageStream(
-        finalText, actualThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
+        finalText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
       );
       let full = '';
       for await (const chunk of stream) {
@@ -355,7 +348,7 @@ const App: React.FC = () => {
         try {
           setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: 'API quota full, automatically retrying with a fallback model...' } : m));
           const stream = geminiService.sendMessageStream(
-            finalText, actualThinking, currentHistory, 'gemma-4-31b-it', selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
+            finalText, isThinking, currentHistory, 'gemma-4-31b-it', selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
           );
           let full = '';
           for await (const chunk of stream) {

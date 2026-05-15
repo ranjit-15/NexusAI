@@ -119,17 +119,25 @@ export class GeminiService {
         const lines = buffer.split('\n\n');
         buffer = lines.pop() || ''; // keep the last incomplete chunk in buffer
 
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const dataStr = line.slice(6);
+        for (let line of lines) {
+          line = line.trim();
+          if (!line) continue;
+          if (line.startsWith('data:')) {
+            let dataStr = line.replace(/^data:\s*/, '').trim();
             if (dataStr === '[DONE]') return;
+            
+            // Defensively strip duplicate data: prefixes if Vercel mangled the stream
+            while (dataStr.startsWith('data:')) {
+              dataStr = dataStr.replace(/^data:\s*/, '').trim();
+            }
+            
             try {
               const data = JSON.parse(dataStr);
               if (data.error) throw new Error(data.error);
               if (data.text) yield data.text;
             } catch (e) {
               if (e instanceof SyntaxError) {
-                console.error("Failed to parse SSE JSON", dataStr);
+                console.warn("Skipping malformed SSE chunk:", dataStr);
               } else {
                 throw e;
               }
