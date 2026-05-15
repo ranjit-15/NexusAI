@@ -295,7 +295,7 @@ const App: React.FC = () => {
 
     try {
       const stream = geminiService.sendMessageStream(
-        finalText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey
+        finalText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey, attachedImagePreview
       );
       let full = '';
       for await (const chunk of stream) {
