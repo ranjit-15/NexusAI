@@ -126,7 +126,7 @@ const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
         body: JSON.stringify({
           message: buildRewritePrompt(text, style, tone, opts),
           history: [],
-          model: 'gemini-2.0-flash',
+          model: 'gemma-4-31b-it',   // Higher quota than gemini-2.0-flash
           apiKey: userApiKey,
           persona: { systemInstruction: buildSystemPrompt() },
         }),

@@ -8,6 +8,7 @@ import TypingIndicator from './components/TypingIndicator';
 import Sidebar from './components/Sidebar';
 import ApiKeyModal, { getStoredApiKey } from './components/ApiKeyModal';
 import ExportModal from './components/ExportModal';
+import HumanizeModal from './components/HumanizeModal';
 import { saveSession, loadSessionsFromFirestore, deleteSessionFromFirestore } from './src/firestoreService';
 
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
@@ -57,6 +58,8 @@ const App: React.FC = () => {
   const [syncStatus, setSyncStatus] = useState<'syncing' | 'synced' | 'error'>('syncing');
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [showHumanizeModal, setShowHumanizeModal] = useState(false);
+  const [humanizeTargetText, setHumanizeTargetText] = useState('');
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   const [isThinking, setIsThinking] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -333,7 +336,7 @@ const App: React.FC = () => {
         setMessages(prev => prev.filter(m => m.id !== botId));
         return;
       }
-      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: err.message || 'Error occurred. Please try again.', isError: true } : m));
+      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: getReadableError(err.message || ''), isError: true } : m));
     } finally { 
       setIsLoading(false); 
       setAbortController(null);
@@ -363,6 +366,17 @@ const App: React.FC = () => {
       )
     : sessions;
 
+  // Handle errors nicely including 429 quota errors
+  const getReadableError = (errMsg: string): string => {
+    if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+      return 'API quota exceeded. Please wait a minute and try again, or add your own API key via the 🔑 key button.';
+    }
+    if (errMsg.includes('API key') || errMsg.includes('API_KEY_INVALID')) {
+      return 'Invalid API key. Please check your key in the 🔑 settings.';
+    }
+    return errMsg || 'An error occurred. Please try again.';
+  };
+
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -388,6 +402,12 @@ const App: React.FC = () => {
     <div className="app-shell">
       {showApiKeyModal && <ApiKeyModal onClose={() => setShowApiKeyModal(false)} />}
       {exportSession && <ExportModal session={exportSession} onClose={() => setExportSession(null)} />}
+      {showHumanizeModal && (
+        <HumanizeModal
+          text={humanizeTargetText}
+          onClose={() => { setShowHumanizeModal(false); setHumanizeTargetText(''); }}
+        />
+      )}
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <Sidebar
@@ -487,21 +507,41 @@ const App: React.FC = () => {
               </button>
 
               {isPersonaMenuOpen && (
-                <div className="absolute right-0 top-full mt-2 w-[230px] dropdown z-50 animate-fade-in">
+                <div className="absolute right-0 top-full mt-2 w-[240px] dropdown z-50 animate-fade-in">
                   <div className="p-1.5">
                     {PERSONAS.map(p => (
                       <div
                         key={p.id}
-                        onClick={() => { setSelectedPersona(p); setIsPersonaMenuOpen(false); }}
-                        className={`dropdown-item flex items-center gap-2.5 ${selectedPersona.id === p.id ? 'active' : ''}`}
+                        onClick={() => {
+                          if (p.id === 'humanizer') {
+                            // Open humanize modal with current chat's last bot message, or empty
+                            const lastBotMsg = [...messages].reverse().find(m => m.role === Role.MODEL && m.text && !m.isError);
+                            setHumanizeTargetText(lastBotMsg?.text || '');
+                            setShowHumanizeModal(true);
+                          } else {
+                            setSelectedPersona(p);
+                          }
+                          setIsPersonaMenuOpen(false);
+                        }}
+                        className={`dropdown-item flex items-center gap-2.5 ${
+                          p.id !== 'humanizer' && selectedPersona.id === p.id ? 'active' : ''
+                        }`}
                       >
-                        <p.icon size={14} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        <p.icon size={14} style={{ color: p.id === 'humanizer' ? '#8b5cf6' : 'var(--accent)', flexShrink: 0 }} />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
+                            {p.name}
+                            {p.id === 'humanizer' && (
+                              <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(139,92,246,0.15)', color: '#a78bfa' }}>TOOL</span>
+                            )}
+                          </div>
                           <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{p.description}</div>
                         </div>
-                        {selectedPersona.id === p.id && (
+                        {p.id !== 'humanizer' && selectedPersona.id === p.id && (
                           <Check size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
+                        )}
+                        {p.id === 'humanizer' && (
+                          <span style={{ color: '#8b5cf6', fontSize: 11 }}>→</span>
                         )}
                       </div>
                     ))}
@@ -601,12 +641,13 @@ const App: React.FC = () => {
               >
                 <Paperclip size={17} />
               </button>
-              {/* Think toggle — next to attach */}
+              {/* Think toggle — next to attach, vertically centered */}
               <button
                 onClick={() => setIsThinking(!isThinking)}
                 disabled={!supportsThinking || isLoading}
-                className={`thinking-toggle flex-shrink-0 ${isThinking ? 'active' : ''}`}
-                title={supportsThinking ? (isThinking ? 'Thinking ON — click to turn off' : 'Enable thinking mode') : 'Not supported for this model'}
+                className={`thinking-toggle flex-shrink-0 self-center ${isThinking ? 'active' : ''}`}
+                title={supportsThinking ? (isThinking ? 'Thinking ON — click to disable' : 'Enable thinking mode') : 'Not supported for this model'}
+                style={{ height: 34 }}
               >
                 <BrainCircuit size={14} className={isThinking ? 'animate-pulse' : ''} />
                 <span className="hidden sm:inline text-[11px]">Think</span>
