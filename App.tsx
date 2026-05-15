@@ -655,7 +655,7 @@ const App: React.FC = () => {
         <div className="input-wrap">
           {/* Quick Shortcuts / Prompt Templates */}
           {!isWelcome && !isLoading && (
-            <div className="flex items-center gap-2 px-4 pb-2 overflow-x-auto no-scrollbar">
+            <div className="flex flex-wrap items-center justify-center gap-2 px-4 pb-2">
               {WELCOME_SUGGESTIONS.map(s => (
                 <button 
                   key={s.text}

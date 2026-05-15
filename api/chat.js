@@ -53,11 +53,6 @@ function buildConfig(model, thinking, sys) {
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
     ],
   };
-  if (thinking && (model.startsWith('gemini') || model.startsWith('gemma-4'))) {
-    cfg.thinkingConfig = model.startsWith('gemma-4')
-      ? { thinkingLevel: 'high' }
-      : { thinkingBudget: 32768 };
-  }
   return cfg;
 }
 
