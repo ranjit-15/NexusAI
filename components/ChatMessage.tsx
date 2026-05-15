@@ -1,13 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, Role } from '../types';
-import { User, Bot, AlertCircle, Volume2, StopCircle, Copy, Check, RefreshCw, Download, Wand2 } from 'lucide-react';
+import { User, Bot, AlertCircle, Volume2, StopCircle, Copy, Check, RefreshCw, Download } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import HumanizeModal from './HumanizeModal';
 
 interface ChatMessageProps {
   message: Message;
@@ -33,7 +32,6 @@ const CopyButton = ({ text }: { text: string }) => {
 const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
   const isUser = message.role === Role.USER;
   const [isPlaying, setIsPlaying] = useState(false);
-  const [showHumanize, setShowHumanize] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
 
   // Clean up speech on unmount
@@ -105,11 +103,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
   if (message.id === 'welcome') return null;
 
   return (
-    <>
-      {showHumanize && (
-        <HumanizeModal text={message.text} onClose={() => setShowHumanize(false)} />
-      )}
-      <div className={`flex w-full mb-4 ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}>
+    <div className={`flex w-full mb-4 ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}>
         <div className={`flex ${isUser ? 'max-w-[80%] lg:max-w-[70%] flex-row-reverse' : 'w-full flex-row'} items-start gap-3`}>
           
           {/* Avatar */}
@@ -256,21 +250,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                   >
                     {isPlaying ? <StopCircle size={13} /> : <Volume2 size={13} />}
                   </button>
-                  {/* Humanize — opens modal with advanced options */}
-                  <button
-                    onClick={() => setShowHumanize(true)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium transition-all"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(139,92,246,0.12), rgba(109,40,217,0.18))',
-                      border: '1px solid rgba(139,92,246,0.25)',
-                      color: '#a78bfa',
-                    }}
-                    title="Humanize — rewrite as natural human writing"
-                  >
-                    <Wand2 size={11} />
-                    <span>Humanize</span>
-                  </button>
-                  {/* Word count */}
+                  {/* Word count of this message */}
                   <span className="ml-auto text-[10px]" style={{ color: 'var(--text-muted)' }}>
                     {message.text.trim().split(/\s+/).filter(Boolean).length} words
                   </span>
@@ -284,7 +264,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
           </div>
         </div>
       </div>
-    </>
   );
 };
 
