@@ -46,6 +46,7 @@ function serializeMessages(messages: Message[]) {
     };
     if (m.isError !== undefined) serialized.isError = m.isError;
     if (m.model !== undefined) serialized.model = m.model;
+    if (m.imageUrl !== undefined) serialized.imageUrl = m.imageUrl;
     return serialized;
   });
 }

@@ -2,20 +2,19 @@
   "framework": "vite",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
-    },
-    {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
   "functions": {
     "api/*.js": {
+      "runtime": "nodejs20.x",
       "maxDuration": 60
     }
   },
   "env": {
-    "GEMINI_API_KEY": "@gemini_api_key"
+    "GEMINI_API_KEY": "@gemini_api_key",
+    "PICO_IMAGE_KEYS": "@pico_image_keys",
+    "PICO_LLM_KEY": "@pico_llm_key"
   }
 }

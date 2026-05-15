@@ -24,11 +24,12 @@ const CURATED_MODELS = [
 
 const ALLOWED = new Set(CURATED_MODELS.map(m => m.id));
 
-const PICO_KEYS = [
-  'v1-Z0FBQUFBQnB6U2NaWjM1dlRuc3hJT2NibGNBMGRfS1A5MVBGRmdEMFJKcWRwNzByZHlDdk91YnJhSi1zdVc2ZVJVcUoyRGNPZ01ZTWp6WE9pQ3Q5bTR4NjFObmRJeW9DcWc9PQ==',
-  'v1-Z0FBQUFBQnB6UWJfTEphUko1UU9IV2trZk1yMlQ2cEhEekw2YUdDeEs5ajJmU2JQNnBzTFd3Sm1oM0VpaEc1Tk1jMHZiU2pfNG1qR3lYZEpyYVZEUmZuUzZ5Wk9iLW9vWGc9PQ==',
-  'v1-Z0FBQUFBQnBZRzl4bEl1b3d3Q1R5bWJoTE1Gamx0Qy00am0zT1ZCdzR3NElwUFVaLVlUUEJIbmpVMDhPMkRsRnM0YWN3NmRKRDBlZkhiQTVWcGEzVGJ6REh0YmJyTlZzMGc9PQ=='
-];
+// Pico API keys — loaded from environment, never hardcoded
+const PICO_KEYS = (process.env.PICO_IMAGE_KEYS || '')
+  .split(',')
+  .map(k => k.trim())
+  .filter(Boolean);
+const PICO_LLM_KEY = process.env.PICO_LLM_KEY || '';
 
 if (!apiKey) console.warn('⚠ GEMINI_API_KEY not set — requests will fail.');
 
@@ -135,7 +136,7 @@ app.post('/api/fallback-llm', async (req, res) => {
   const { prompt } = req.body || {};
   if (typeof prompt !== 'string' || !prompt.trim()) return res.status(400).json({ error: 'Valid prompt required' });
   try {
-    const fallbackRes = await fetch(`https://backend.buildpicoapps.com/aero/run/llm-api?pk=${PICO_KEYS[0]}`, {
+    const fallbackRes = await fetch(`https://backend.buildpicoapps.com/aero/run/llm-api?pk=${PICO_LLM_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompt })

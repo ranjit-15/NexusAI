@@ -12,6 +12,7 @@ export interface Message {
   timestamp: Date;
   isError?: boolean;
   model?: string;
+  imageUrl?: string;
 }
 
 export interface ChatSession {

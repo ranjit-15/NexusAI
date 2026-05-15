@@ -1,8 +1,8 @@
-const PICO_KEYS = [
-  'v1-Z0FBQUFBQnB6U2NaWjM1dlRuc3hJT2NibGNBMGRfS1A5MVBGRmdEMFJKcWRwNzByZHlDdk91YnJhSi1zdVc2ZVJVcUoyRGNPZ01ZTWp6WE9pQ3Q5bTR4NjFObmRJeW9DcWc9PQ==',
-  'v1-Z0FBQUFBQnB6UWJfTEphUko1UU9IV2trZk1yMlQ2cEhEekw2YUdDeEs5ajJmU2JQNnBzTFd3Sm1oM0VpaEc1Tk1jMHZiU2pfNG1qR3lYZEpyYVZEUmZuUzZ5Wk9iLW9vWGc9PQ==',
-  'v1-Z0FBQUFBQnBZRzl4bEl1b3d3Q1R5bWJoTE1Gamx0Qy00am0zT1ZCdzR3NElwUFVaLVlUUEJIbmpVMDhPMkRsRnM0YWN3NmRKRDBlZkhiQTVWcGEzVGJ6REh0YmJyTlZzMGc9PQ=='
-];
+// Pico API keys loaded from environment — never hardcoded
+const PICO_KEYS = (process.env.PICO_IMAGE_KEYS || '')
+  .split(',')
+  .map(k => k.trim())
+  .filter(Boolean);
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,6 +14,10 @@ export default async function handler(req, res) {
   const { prompt } = req.body || {};
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: 'Valid prompt is required' });
+  }
+
+  if (!PICO_KEYS.length) {
+    return res.status(503).json({ error: 'Image generation not configured' });
   }
 
   let lastError = null;

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Lightbulb, PenTool, Plus, Cloud, CloudOff, Image as ImageIcon, Key, Download, Search, Paperclip, X } from 'lucide-react';
+import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Image as ImageIcon, Key, Download, Search, Paperclip, X, PenTool } from 'lucide-react';
 import { geminiService } from './services/geminiService';
 import { Message, Role, Persona, ModelOption, ChatSession } from './types';
 import { PERSONAS } from './constants/personas';
@@ -10,12 +10,7 @@ import ApiKeyModal, { getStoredApiKey } from './components/ApiKeyModal';
 import ExportModal from './components/ExportModal';
 import { saveSession, loadSessionsFromFirestore, deleteSessionFromFirestore } from './src/firestoreService';
 
-const MODEL_KEY = 'nexus_model';
-
 const genId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
-
-const parseMessages = (msgs: any[]): Message[] =>
-  (msgs || []).map((m: any) => ({ ...m, timestamp: new Date(m.timestamp) }));
 
 const getChatTitle = (msgs: Message[]): string => {
   const first = msgs.find(m => m.role === Role.USER && m.text?.trim());
@@ -34,7 +29,7 @@ const WELCOME_SUGGESTIONS = [
 ];
 
 const App: React.FC = () => {
-  const deviceId = localStorage.getItem('nexus_device_id') || undefined;
+  const deviceId = (() => { try { return localStorage.getItem('nexus_device_id') || undefined; } catch { return undefined; } })();
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -258,12 +253,23 @@ const App: React.FC = () => {
   const handleSubmit = async (textOrEvent?: string | React.MouseEvent) => {
     if (isListening) toggleListening();
     const userText = (typeof textOrEvent === 'string' ? textOrEvent : inputValue).trim();
-    if (!userText || isLoading) return;
+    // Allow submission if there's text OR an image attached
+    if ((!userText && !imageFile) || isLoading) return;
+    
+    const finalText = userText || (imageFile ? `[Image: ${imageFile.name}]` : '');
+    const attachedImagePreview = imagePreview;
+    
     setInputValue('');
     setImageFile(null);
     setImagePreview(null);
 
-    const userMsg: Message = { id: genId(), role: Role.USER, text: userText, timestamp: new Date() };
+    const userMsg: Message = { 
+      id: genId(), 
+      role: Role.USER, 
+      text: finalText, 
+      timestamp: new Date(),
+      imageUrl: attachedImagePreview || undefined,
+    };
     const botId = genId();
     const botMsg: Message = { id: botId, role: Role.MODEL, text: '', timestamp: new Date(), model: selectedModel };
 
@@ -273,7 +279,7 @@ const App: React.FC = () => {
 
     if (!activeId) {
       const newSessionId = createSessionFromMessages([...currentHistory, userMsg, botMsg]);
-      fetch('/api/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: userText }) })
+      fetch('/api/title', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: finalText }) })
         .then(r => r.json())
         .then(d => {
           if (d.title) setSessions(prev => prev.map(s => s.id === newSessionId ? { ...s, title: d.title } : s));
@@ -289,23 +295,31 @@ const App: React.FC = () => {
 
     try {
       const stream = geminiService.sendMessageStream(
-        userText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey
+        finalText, isThinking, currentHistory, selectedModel, selectedPersona.systemInstruction, controller.signal, userApiKey
       );
       let full = '';
       for await (const chunk of stream) {
         full += chunk;
         setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: full } : m));
       }
+      // Ensure non-empty response if stream ended with no content
+      if (!full) {
+        setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: 'No response received. Please try again.', isError: true } : m));
+      }
     } catch (err: any) {
-      if (err.name === 'AbortError') return;
-      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: err.message || 'Error occurred', isError: true } : m));
+      if (err.name === 'AbortError') {
+        // Remove the empty bot message on abort
+        setMessages(prev => prev.filter(m => m.id !== botId));
+        return;
+      }
+      setMessages(prev => prev.map(m => m.id === botId ? { ...m, text: err.message || 'Error occurred. Please try again.', isError: true } : m));
     } finally { 
       setIsLoading(false); 
       setAbortController(null);
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSubmit(); }
   };
 
@@ -351,6 +365,7 @@ const App: React.FC = () => {
         onNewChat={startNewChat}
         onSelectSession={selectSession}
         onDeleteSession={deleteSession}
+        onDeleteAll={deleteAllChats}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
         showSearch={showSearch}
@@ -525,7 +540,7 @@ const App: React.FC = () => {
                 {messages.map(msg => (
                   <ChatMessage key={msg.id} message={msg} onRetry={msg.isError ? handleRetry : undefined} />
                 ))}
-                {isLoading && messages[messages.length - 1]?.text === '' && <TypingIndicator />}
+                {isLoading && <TypingIndicator />}
               </>
             )}
             <div ref={messagesEndRef} className="h-4" />
@@ -597,7 +612,7 @@ const App: React.FC = () => {
                 </button>
                 <button
                   onClick={() => handleSubmit()}
-                  disabled={!inputValue.trim() || isLoading}
+                  disabled={(!inputValue.trim() && !imageFile) || isLoading}
                   className="btn-send"
                 >
                   <Send size={15} />

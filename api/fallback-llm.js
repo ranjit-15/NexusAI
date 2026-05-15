@@ -1,4 +1,5 @@
-const PICO_KEY = 'v1-Z0FBQUFBQnB6U2NaWjM1dlRuc3hJT2NibGNBMGRfS1A5MVBGRmdEMFJKcWRwNzByZHlDdk91YnJhSi1zdVc2ZVJVcUoyRGNPZ01ZTWp6WE9pQ3Q5bTR4NjFObmRJeW9DcWc5PQ==';
+// Pico LLM key loaded from environment — never hardcoded
+const PICO_KEY = process.env.PICO_LLM_KEY || '';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,6 +11,10 @@ export default async function handler(req, res) {
   const { prompt } = req.body || {};
   if (typeof prompt !== 'string' || !prompt.trim()) {
     return res.status(400).json({ error: 'Valid prompt required' });
+  }
+
+  if (!PICO_KEY) {
+    return res.status(503).json({ error: 'Fallback LLM not configured' });
   }
 
   try {

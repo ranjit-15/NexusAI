@@ -128,6 +128,17 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                 ? 'msg-error px-4 py-3 w-full'
                 : 'msg-bot w-full py-1'
           }`}>
+            {/* Show attached image for user messages */}
+            {isUser && message.imageUrl && (
+              <div className="mb-2">
+                <img 
+                  src={message.imageUrl} 
+                  alt="attached" 
+                  className="max-h-48 rounded-lg border object-contain"
+                  style={{ borderColor: 'var(--border)' }} 
+                />
+              </div>
+            )}
             {message.isError ? (
               <div className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 text-red-400 font-medium text-sm">
@@ -175,12 +186,14 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                       </a>
                     </div>
                   ),
-                  code({ node, inline, className, children, ...props }: any) {
+                  code({ node, className, children, ...props }: any) {
                     const match = /language-(\w+)/.exec(className || '');
                     const lang = match ? match[1] : '';
                     const code = String(children).replace(/\n$/, '');
+                    // Treat as block if it has a language or contains newlines
+                    const isBlock = !!(match || code.includes('\n'));
 
-                    if (!inline && (match || code.includes('\n'))) {
+                    if (isBlock) {
                       return (
                         <div className="rounded-xl overflow-hidden my-3" style={{ border: '1px solid var(--border)', background: 'var(--bg-secondary)' }}>
                           <div className="flex items-center justify-between px-4 py-2" style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border)' }}>
@@ -192,7 +205,6 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
                               style={vscDarkPlus}
                               language={lang}
                               PreTag="div"
-                              {...props}
                               customStyle={{ margin: 0, padding: '1rem', background: 'transparent', fontSize: '0.85em', lineHeight: '1.6' }}
                               codeTagProps={{ style: { fontFamily: "'JetBrains Mono', 'Fira Code', monospace" } }}
                             >

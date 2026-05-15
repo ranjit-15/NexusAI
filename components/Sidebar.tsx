@@ -10,6 +10,7 @@ interface SidebarProps {
   onNewChat: () => void;
   onSelectSession: (session: ChatSession) => void;
   onDeleteSession: (id: string) => void;
+  onDeleteAll: () => void;
   searchQuery: string;
   onSearchChange: (q: string) => void;
   showSearch: boolean;
@@ -19,8 +20,9 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({
   sessions, activeId, isOpen, onClose, onNewChat, onSelectSession, onDeleteSession,
-  searchQuery, onSearchChange, showSearch, onToggleSearch, onExport
+  onDeleteAll, searchQuery, onSearchChange, showSearch, onToggleSearch, onExport
 }) => {
+  const [showConfirmClear, setShowConfirmClear] = useState(false);
   const grouped = groupByDate(sessions);
 
   return (
@@ -50,6 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* New Chat + Search row */}
       <div className="px-3 pt-3 pb-1 flex-shrink-0 flex items-center gap-2">
         <button onClick={onNewChat} className="new-chat-btn flex-1">
+          <Plus size={14} style={{ flexShrink: 0, color: 'var(--text-muted)' }} />
           <span className="whitespace-nowrap">New chat</span>
         </button>
         <button
@@ -141,6 +144,41 @@ const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
+      {/* Footer: Clear all */}
+      {sessions.length > 0 && (
+        <div className="px-3 pb-3 pt-2 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+          {showConfirmClear ? (
+            <div className="flex items-center gap-2">
+              <span className="text-xs flex-1" style={{ color: 'var(--text-muted)' }}>Delete all chats?</span>
+              <button
+                onClick={() => { onDeleteAll(); setShowConfirmClear(false); }}
+                className="px-2 py-1 rounded text-xs font-medium"
+                style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+              >
+                Yes, delete
+              </button>
+              <button
+                onClick={() => setShowConfirmClear(false)}
+                className="px-2 py-1 rounded text-xs"
+                style={{ color: 'var(--text-muted)' }}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowConfirmClear(true)}
+              className="flex items-center gap-1.5 text-xs w-full px-2 py-1.5 rounded-lg transition-colors"
+              style={{ color: 'var(--text-muted)' }}
+              onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#ef4444'; (e.currentTarget as HTMLButtonElement).style.background = 'rgba(239,68,68,0.08)'; }}
+              onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+            >
+              <Trash2 size={12} />
+              Clear all chats
+            </button>
+          )}
+        </div>
+      )}
     </aside>
   );
 };
