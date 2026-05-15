@@ -104,8 +104,42 @@ export class GeminiService {
       throw new Error(errorMsg || 'Failed to generate response');
     }
 
-    const data = await response.json();
-    if (data.text) yield data.text;
+    if (!response.body) throw new Error('No response body');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n\n');
+        buffer = lines.pop() || ''; // keep the last incomplete chunk in buffer
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const dataStr = line.slice(6);
+            if (dataStr === '[DONE]') return;
+            try {
+              const data = JSON.parse(dataStr);
+              if (data.error) throw new Error(data.error);
+              if (data.text) yield data.text;
+            } catch (e) {
+              if (e instanceof SyntaxError) {
+                console.error("Failed to parse SSE JSON", dataStr);
+              } else {
+                throw e;
+              }
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   public async generateSpeech(text: string, userApiKey?: string): Promise<string> {

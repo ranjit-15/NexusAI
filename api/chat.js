@@ -92,15 +92,30 @@ export default async function handler(req, res) {
       }
     }
 
-    const response = await client.models.generateContent({
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const stream = await client.models.generateContentStream({
       model: targetModel,
       contents: [...formatHistory(history), { role: 'user', parts: userParts }],
       config: buildConfig(targetModel, thinking, sys),
     });
 
-    return res.status(200).json({ text: extractText(response) });
+    for await (const chunk of stream) {
+      if (chunk.text) {
+        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      }
+    }
+    res.write('data: [DONE]\n\n');
+    res.end();
   } catch (err) {
     console.error('Chat error:', err);
-    return res.status(500).json({ error: err?.message || 'Failed to generate response' });
+    if (!res.headersSent) {
+      return res.status(500).json({ error: err?.message || 'Failed to generate response' });
+    } else {
+      res.write(`data: ${JSON.stringify({ error: err?.message || 'Stream error' })}\n\n`);
+      res.end();
+    }
   }
 }
