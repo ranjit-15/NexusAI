@@ -513,35 +513,18 @@ const App: React.FC = () => {
                       <div
                         key={p.id}
                         onClick={() => {
-                          if (p.id === 'humanizer') {
-                            // Open humanize modal with current chat's last bot message, or empty
-                            const lastBotMsg = [...messages].reverse().find(m => m.role === Role.MODEL && m.text && !m.isError);
-                            setHumanizeTargetText(lastBotMsg?.text || '');
-                            setShowHumanizeModal(true);
-                          } else {
-                            setSelectedPersona(p);
-                          }
+                          setSelectedPersona(p);
                           setIsPersonaMenuOpen(false);
                         }}
-                        className={`dropdown-item flex items-center gap-2.5 ${
-                          p.id !== 'humanizer' && selectedPersona.id === p.id ? 'active' : ''
-                        }`}
+                        className={`dropdown-item flex items-center gap-2.5 ${selectedPersona.id === p.id ? 'active' : ''}`}
                       >
                         <p.icon size={14} style={{ color: p.id === 'humanizer' ? '#8b5cf6' : 'var(--accent)', flexShrink: 0 }} />
                         <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>
-                            {p.name}
-                            {p.id === 'humanizer' && (
-                              <span className="ml-1.5 text-[9px] px-1.5 py-0.5 rounded-full font-semibold" style={{ background: 'rgba(139,92,246,0.15)', color: '#a78bfa' }}>TOOL</span>
-                            )}
-                          </div>
+                          <div className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{p.name}</div>
                           <div className="text-[10px]" style={{ color: 'var(--text-muted)' }}>{p.description}</div>
                         </div>
-                        {p.id !== 'humanizer' && selectedPersona.id === p.id && (
-                          <Check size={13} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-                        )}
-                        {p.id === 'humanizer' && (
-                          <span style={{ color: '#8b5cf6', fontSize: 11 }}>→</span>
+                        {selectedPersona.id === p.id && (
+                          <Check size={13} style={{ color: p.id === 'humanizer' ? '#8b5cf6' : 'var(--accent)', flexShrink: 0 }} />
                         )}
                       </div>
                     ))}
@@ -641,16 +624,24 @@ const App: React.FC = () => {
               >
                 <Paperclip size={17} />
               </button>
-              {/* Think toggle — next to attach, vertically centered */}
+              {/* Think toggle — small circle next to attach */}
               <button
                 onClick={() => setIsThinking(!isThinking)}
                 disabled={!supportsThinking || isLoading}
-                className={`thinking-toggle flex-shrink-0 self-center ${isThinking ? 'active' : ''}`}
                 title={supportsThinking ? (isThinking ? 'Thinking ON — click to disable' : 'Enable thinking mode') : 'Not supported for this model'}
-                style={{ height: 34 }}
+                className="flex-shrink-0 self-center flex items-center justify-center rounded-full transition-all"
+                style={{
+                  width: 28,
+                  height: 28,
+                  background: isThinking
+                    ? 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.3))'
+                    : 'var(--bg-tertiary)',
+                  border: `1px solid ${isThinking ? 'rgba(99,102,241,0.5)' : 'var(--border)'}`,
+                  color: isThinking ? '#818cf8' : 'var(--text-muted)',
+                  boxShadow: isThinking ? '0 0 8px rgba(99,102,241,0.3)' : 'none',
+                }}
               >
-                <BrainCircuit size={14} className={isThinking ? 'animate-pulse' : ''} />
-                <span className="hidden sm:inline text-[11px]">Think</span>
+                <BrainCircuit size={13} className={isThinking ? 'animate-pulse' : ''} />
               </button>
               <textarea
                 ref={inputRef}

@@ -99,6 +99,7 @@ ${text}
 const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
   const [style, setStyle] = useState('casual');
   const [tone, setTone] = useState('neutral');
+  const [inputText, setInputText] = useState(text || '');
   const [opts, setOpts] = useState<AdvOpts>({
     avoidAIDetection: true,
     keepKeywords: true,
@@ -110,23 +111,25 @@ const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
-  const [wordCountBefore, setWordCountBefore] = useState(0);
   const [wordCountAfter, setWordCountAfter] = useState(0);
 
+  const wordCountInput = inputText.trim().split(/\s+/).filter(Boolean).length;
+
   const humanize = useCallback(async () => {
+    const textToProcess = inputText.trim();
+    if (!textToProcess) { setError('Please paste or type some text to humanize.'); return; }
     setIsLoading(true);
     setError('');
     setResult('');
-    setWordCountBefore(text.trim().split(/\s+/).length);
     try {
       const userApiKey = getStoredApiKey();
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: buildRewritePrompt(text, style, tone, opts),
+          message: buildRewritePrompt(textToProcess, style, tone, opts),
           history: [],
-          model: 'gemma-4-31b-it',   // Higher quota than gemini-2.0-flash
+          model: 'gemma-4-31b-it',
           apiKey: userApiKey,
           persona: { systemInstruction: buildSystemPrompt() },
         }),
@@ -135,13 +138,13 @@ const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
       if (!res.ok) throw new Error(data.error || 'Humanization failed');
       const output = data.text || '';
       setResult(output);
-      setWordCountAfter(output.trim().split(/\s+/).length);
+      setWordCountAfter(output.trim().split(/\s+/).filter(Boolean).length);
     } catch (e: any) {
       setError(e.message || 'Something went wrong. Try again.');
     } finally {
       setIsLoading(false);
     }
-  }, [text, style, tone, opts]);
+  }, [inputText, style, tone, opts]);
 
   const handleCopy = async () => {
     if (!result) return;
@@ -153,7 +156,7 @@ const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
   const toggleOpt = (key: keyof AdvOpts) =>
     setOpts(prev => ({ ...prev, [key]: !prev[key] }));
 
-  const wordDelta = wordCountAfter - wordCountBefore;
+  const wordDelta = result ? wordCountAfter - wordCountInput : 0;
 
   return (
     <div
@@ -276,17 +279,31 @@ const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
             )}
           </div>
 
-          {/* Original preview */}
+          {/* Input textarea — editable, pre-filled from message */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest mb-1.5" style={{ color: 'var(--text-muted)' }}>
-              Original · {text.trim().split(/\s+/).length} words
-            </p>
-            <div
-              className="rounded-xl p-3 text-xs leading-relaxed max-h-24 overflow-y-auto italic"
-              style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-            >
-              {text.length > 400 ? text.slice(0, 400) + '…' : text}
+            <div className="flex items-center justify-between mb-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: 'var(--text-muted)' }}>Text to Humanize</p>
+              <span
+                className="text-[11px] px-2 py-0.5 rounded-full font-medium"
+                style={{ background: 'var(--bg-tertiary)', color: wordCountInput > 0 ? 'var(--text-secondary)' : 'var(--text-muted)', border: '1px solid var(--border)' }}
+              >
+                {wordCountInput} words
+              </span>
             </div>
+            <textarea
+              value={inputText}
+              onChange={e => { setInputText(e.target.value); setResult(''); setError(''); }}
+              placeholder="Paste your AI-generated text here…"
+              rows={4}
+              className="w-full rounded-xl px-3 py-2.5 text-sm leading-relaxed resize-none"
+              style={{
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border)',
+                color: 'var(--text-primary)',
+                outline: 'none',
+                fontFamily: 'Inter, sans-serif',
+              }}
+            />
           </div>
 
           {/* Humanize CTA */}
