@@ -69,11 +69,18 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry }) => {
     const speak = (voices: SpeechSynthesisVoice[]) => {
       const utterance = new SpeechSynthesisUtterance(plainText);
       utterance.rate = 1.0;
-      utterance.pitch = 1.0;
+      utterance.pitch = 1.1;   // Slightly higher pitch for a naturally female tone
       utterance.volume = 1.0;
-      const preferred = voices.find(v => v.lang === 'en-US' && v.localService) ||
-                        voices.find(v => v.lang.startsWith('en-'));
+
+      // Prefer known female voices across platforms (macOS, Windows, Chrome, Android)
+      const femaleNames = ['samantha', 'google uk english female', 'zira', 'aria', 'jenny',
+                           'google us english', 'karen', 'victoria', 'tessa', 'moira', 'fiona'];
+      const preferred =
+        voices.find(v => femaleNames.some(n => v.name.toLowerCase().includes(n)) && v.lang.startsWith('en')) ||
+        voices.find(v => v.lang === 'en-US' && v.localService) ||
+        voices.find(v => v.lang.startsWith('en-'));
       if (preferred) utterance.voice = preferred;
+
       utterance.onend = () => setIsPlaying(false);
       utterance.onerror = () => setIsPlaying(false);
       utteranceRef.current = utterance;

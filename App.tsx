@@ -510,16 +510,6 @@ const App: React.FC = () => {
               )}
             </div>
 
-            {/* Thinking toggle */}
-            <button
-              onClick={() => setIsThinking(!isThinking)}
-              disabled={!supportsThinking}
-              className={`thinking-toggle ${isThinking ? 'active' : ''}`}
-              title={supportsThinking ? 'Toggle thinking mode' : 'Not supported for this model'}
-            >
-              <BrainCircuit size={13} className={isThinking ? 'animate-pulse' : ''} />
-              <span className="hidden sm:inline">Think</span>
-            </button>
 
             {/* Export button (only when chat active) */}
             {activeSession && (
@@ -601,6 +591,7 @@ const App: React.FC = () => {
             <div className="input-container flex items-end gap-2 p-2">
               {/* Hidden file input */}
               <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+              {/* Attach image */}
               <button
                 type="button"
                 onClick={() => fileInputRef.current?.click()}
@@ -609,6 +600,16 @@ const App: React.FC = () => {
                 title="Attach image"
               >
                 <Paperclip size={17} />
+              </button>
+              {/* Think toggle — next to attach */}
+              <button
+                onClick={() => setIsThinking(!isThinking)}
+                disabled={!supportsThinking || isLoading}
+                className={`thinking-toggle flex-shrink-0 ${isThinking ? 'active' : ''}`}
+                title={supportsThinking ? (isThinking ? 'Thinking ON — click to turn off' : 'Enable thinking mode') : 'Not supported for this model'}
+              >
+                <BrainCircuit size={14} className={isThinking ? 'animate-pulse' : ''} />
+                <span className="hidden sm:inline text-[11px]">Think</span>
               </button>
               <textarea
                 ref={inputRef}
