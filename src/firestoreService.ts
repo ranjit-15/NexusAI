@@ -13,8 +13,6 @@ import {
   orderBy,
   serverTimestamp,
   Timestamp,
-  getDoc,
-  type DocumentSnapshot,
   type DocumentData,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -80,7 +78,7 @@ export async function loadSessionsFromFirestore(): Promise<ChatSession[]> {
   const snap = await getDocs(q);
 
   return snap.docs
-    .map((d: DocumentSnapshot<DocumentData>) => {
+    .map((d) => {
       const data = d.data() as DocumentData;
       return {
         id: (data['id'] as string) || d.id,

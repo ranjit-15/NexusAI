@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Message, Role } from '../types';
-import { User, Bot, AlertCircle, Volume2, StopCircle, Copy, Check, RefreshCw, Download } from 'lucide-react';
+import { User, Bot, AlertCircle, Volume2, StopCircle, Copy, Check, RefreshCw, Download, PenTool } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -12,6 +12,7 @@ interface ChatMessageProps {
   message: Message;
   onRetry?: (id: string) => void;
   isLast?: boolean;
+  onHumanize?: (text: string) => void;
 }
 
 const CopyButton = ({ text }: { text: string }) => {
@@ -32,7 +33,7 @@ const CopyButton = ({ text }: { text: string }) => {
   );
 };
 
-const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry, isLast }) => {
+const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry, isLast, onHumanize }) => {
   const isUser = message.role === Role.USER;
   const [isPlaying, setIsPlaying] = useState(false);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
@@ -198,7 +199,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry, isLast }) =
                         </a>
                       </div>
                     ),
-                    code({ node, className, children, ...props }: any) {
+                    code({ className, children, ...props }: any) {
                       const match = /language-(\w+)/.exec(className || '');
                       const lang = match ? match[1] : '';
                       const code = String(children).replace(/\n$/, '');
@@ -263,6 +264,19 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry, isLast }) =
                       <RefreshCw size={13} />
                     </button>
                   )}
+                  {/* Humanize button */}
+                  {onHumanize && message.text && (
+                    <button
+                      onClick={() => onHumanize(message.text)}
+                      className="p-1 rounded transition-colors"
+                      style={{ color: 'var(--text-muted)' }}
+                      title="Humanize this text"
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = '#a78bfa'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)'; }}
+                    >
+                      <PenTool size={13} />
+                    </button>
+                  )}
                   {/* Word count of this message */}
                   <span className="ml-auto text-[10px]" style={{ color: 'var(--text-muted)' }}>
                     {message.text.trim().split(/\s+/).filter(Boolean).length} words
@@ -271,7 +285,7 @@ const ChatMessage: React.FC<ChatMessageProps> = ({ message, onRetry, isLast }) =
               )}
             </div>
 
-            <span className="text-[10px] text-gray-600 mt-1 px-1">
+            <span className="text-[10px] mt-1 px-1" style={{ color: 'var(--text-muted)' }}>
               {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
             </span>
           </div>

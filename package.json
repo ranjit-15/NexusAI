@@ -1,20 +1,17 @@
 {
   "name": "nexus-ai-chat",
+  "version": "2.1.0",
+  "description": "Next-Generation AI Chat Platform",
+  "author": "Ranjit Yadav",
   "private": true,
-  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview",
-    "server": "node server/index.js"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@google/genai": "^1.33.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.4.5",
-    "express": "^4.19.2",
-    "express-rate-limit": "^8.5.1",
     "firebase": "^11.8.1",
     "katex": "^0.16.45",
     "lucide-react": "^0.400.0",

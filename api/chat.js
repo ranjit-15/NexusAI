@@ -24,13 +24,19 @@ const CURATED_MODELS = [
   { id: 'gemma-4-26b-a4b-it', name: 'Gemma 4 26B MoE', description: 'Open model, efficient mixture-of-experts', capabilities: ['text', 'thinking', 'image'] },
   { id: 'gemini-3.1-pro-preview', name: 'Gemini 3.1 Pro', description: 'Most advanced — complex reasoning & agentic tasks', capabilities: ['text', 'thinking'] },
   { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash', description: 'Frontier performance at fraction of cost', capabilities: ['text', 'thinking'] },
-  { id: 'gemini-3.1-flash-lite', name: 'Gemini 3.1 Flash Lite', description: 'Ultra fast, budget-friendly 3.1 model', capabilities: ['text', 'thinking'] },
+  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite', description: 'Ultra fast, budget-friendly 3.1 model', capabilities: ['text', 'thinking'] },
   { id: 'gemini-2.5-pro', name: 'Gemini 2.5 Pro', description: 'Deep reasoning and coding capabilities', capabilities: ['text', 'thinking'] },
   { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', description: 'Best price-performance with reasoning', capabilities: ['text', 'thinking'] },
   { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite', description: 'Fastest and most budget-friendly 2.5 model', capabilities: ['text', 'thinking'] },
   { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash', description: 'Previous gen workhorse, 1M context', capabilities: ['text'] },
 ];
-const ALLOWED = new Set(CURATED_MODELS.map(m => m.id));
+// Allow both the preview and non-preview variants so model IDs returned by the
+// models API are always accepted regardless of exact suffix.
+const ALLOWED = new Set([
+  ...CURATED_MODELS.map(m => m.id),
+  'gemini-3.1-flash-lite',
+  'image-generator',
+]);
 
 function formatHistory(messages = []) {
   return messages
@@ -53,13 +59,17 @@ function buildConfig(model, thinking, sys) {
       { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' },
     ],
   };
-  
+
   if (thinking && (model.startsWith('gemini') || model.startsWith('gemma-4'))) {
-    cfg.thinkingConfig = model.startsWith('gemma-4')
-      ? { thinkingLevel: 'high' }
-      : { thinkingBudgetTokens: 1024 }; // Correct field for @google/genai
+    if (model.startsWith('gemma-4')) {
+      // Gemma 4 uses thinkingLevel at top-level thinkingConfig
+      cfg.thinkingConfig = { thinkingLevel: 'high' };
+    } else {
+      // Gemini models require thinkingConfig inside generationConfig
+      cfg.generationConfig = { thinkingConfig: { thinkingBudgetTokens: 1024 } };
+    }
   }
-  
+
   return cfg;
 }
 
@@ -110,8 +120,10 @@ export default async function handler(req, res) {
     });
 
     for await (const chunk of stream) {
-      if (chunk.text) {
-        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
+      // @google/genai v1.x exposes .text as a getter — call it safely
+      const text = typeof chunk.text === 'function' ? chunk.text() : chunk.text;
+      if (text) {
+        res.write(`data: ${JSON.stringify({ text })}\n\n`);
       }
     }
     res.write('data: [DONE]\n\n');

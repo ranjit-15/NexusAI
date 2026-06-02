@@ -401,7 +401,7 @@ body {
 }
 .new-chat-btn:hover {
   background: var(--bg-hover);
-  border-color: rgba(255,255,255,0.14);
+  border-color: var(--border-active);
 }
 
 /* ─── Sidebar mobile overlay ─────────────────────────────────── */
@@ -456,6 +456,13 @@ body {
   /* 'open' class shows it on mobile; on desktop open is handled by width */
   .sidebar.open {
     transform: translateX(0);
+    pointer-events: auto;
+  }
+}
+
+/* ─── Desktop sidebar always has pointer-events when open ────── */
+@media (min-width: 769px) {
+  .sidebar.open, .sidebar:not(.collapsed) {
     pointer-events: auto;
   }
 }

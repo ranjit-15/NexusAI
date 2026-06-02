@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Send, Menu, BrainCircuit, ChevronDown, Check, Mic, StopCircle, Zap, Code, Image as ImageIcon, Key, Download, Search, Paperclip, X, PenTool, Sun, Moon } from 'lucide-react';
 import { geminiService } from './services/geminiService';
 import { Message, Role, Persona, ModelOption, ChatSession } from './types';
@@ -50,8 +50,22 @@ const WELCOME_SUGGESTIONS = [
   { icon: Zap, text: 'Help me debug', desc: 'my React application' },
 ];
 
+// ── Error message helper — defined at module level so it's always available ──
+const getReadableError = (errMsg: string): string => {
+  if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+    return 'API quota exceeded. Please wait a minute and try again, or add your own API key via the 🔑 key button.';
+  }
+  if (errMsg.includes('API key') || errMsg.includes('API_KEY_INVALID')) {
+    return 'Invalid API key. Please check your key in the 🔑 settings.';
+  }
+  return errMsg || 'An error occurred. Please try again.';
+};
+
 const App: React.FC = () => {
-  const deviceId = (() => { try { return localStorage.getItem('nexus_device_id') || undefined; } catch { return undefined; } })();
+  // Stable device ID — computed once via useMemo so it's consistent across renders
+  const deviceId = useMemo<string | undefined>(() => {
+    try { return localStorage.getItem('nexus_device_id') || undefined; } catch { return undefined; }
+  }, []);
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -65,7 +79,10 @@ const App: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [selectedPersona, setSelectedPersona] = useState<Persona>(PERSONAS[0]);
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
-  const [selectedModel, setSelectedModel] = useState<string>('gemma-4-31b-it');
+  const [selectedModel, setSelectedModel] = useState<string>(() => {
+    // Persist model selection across page reloads
+    try { return localStorage.getItem('nexus_selected_model') || 'gemma-4-31b-it'; } catch { return 'gemma-4-31b-it'; }
+  });
   const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
   const [isPersonaMenuOpen, setIsPersonaMenuOpen] = useState(false);
   // Sidebar: open by default on desktop, closed on mobile
@@ -137,7 +154,12 @@ const App: React.FC = () => {
         return updated;
       });
     }
-  }, [messages, activeId]);
+  }, [messages, activeId, selectedModel]);
+
+  // Persist selected model to localStorage whenever it changes
+  useEffect(() => {
+    try { localStorage.setItem('nexus_selected_model', selectedModel); } catch { /* ignore */ }
+  }, [selectedModel]);
 
   // Scroll to bottom on new messages
   useEffect(() => {
@@ -253,14 +275,20 @@ const App: React.FC = () => {
   };
 
   const handleRetry = async (errorMsgId: string) => {
+    // Find the message to retry (could be an error msg or the last bot msg for regeneration)
     const idx = messages.findIndex(m => m.id === errorMsgId);
     if (idx === -1) return;
-    const userMsg = messages[idx - 1];
-    if (!userMsg || userMsg.role !== Role.USER) return;
+
+    // Find the most recent user message before this one
+    let userMsgIdx = idx - 1;
+    while (userMsgIdx >= 0 && messages[userMsgIdx].role !== Role.USER) userMsgIdx--;
+    const userMsg = messages[userMsgIdx];
+    if (!userMsg) return;
 
     const botId = genId();
+    // Replace the clicked message with a fresh empty bot message
     const newMsgs = [
-      ...messages.filter(m => m.id !== errorMsgId),
+      ...messages.slice(0, idx),
       { id: botId, role: Role.MODEL, text: '', timestamp: new Date(), model: selectedModel },
     ];
     setMessages(newMsgs);
@@ -268,7 +296,7 @@ const App: React.FC = () => {
 
     try {
       const stream = geminiService.sendMessageStream(
-        userMsg.text, isThinking, messages.slice(0, idx - 1), selectedModel, selectedPersona.systemInstruction
+        userMsg.text, isThinking, messages.slice(0, userMsgIdx), selectedModel, selectedPersona.systemInstruction
       );
       let full = '';
       for await (const chunk of stream) {
@@ -392,17 +420,6 @@ const App: React.FC = () => {
         s.messages.some(m => m.text?.toLowerCase().includes(searchQuery.toLowerCase()))
       )
     : sessions;
-
-  // Handle errors nicely including 429 quota errors
-  const getReadableError = (errMsg: string): string => {
-    if (errMsg.includes('429') || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
-      return 'API quota exceeded. Please wait a minute and try again, or add your own API key via the 🔑 key button.';
-    }
-    if (errMsg.includes('API key') || errMsg.includes('API_KEY_INVALID')) {
-      return 'Invalid API key. Please check your key in the 🔑 settings.';
-    }
-    return errMsg || 'An error occurred. Please try again.';
-  };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -634,7 +651,8 @@ const App: React.FC = () => {
                     key={msg.id} 
                     message={msg} 
                     onRetry={handleRetry} 
-                    isLast={index === messages.length - 1} 
+                    isLast={index === messages.length - 1}
+                    onHumanize={(text) => { setHumanizeTargetText(text); setShowHumanizeModal(true); }}
                   />
                 ))}
                 {isLoading && <TypingIndicator />}

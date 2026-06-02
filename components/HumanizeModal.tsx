@@ -134,11 +134,48 @@ const HumanizeModal: React.FC<HumanizeModalProps> = ({ text, onClose }) => {
           persona: { systemInstruction: buildSystemPrompt() },
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Humanization failed');
-      const output = data.text || '';
-      setResult(output);
-      setWordCountAfter(output.trim().split(/\s+/).filter(Boolean).length);
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error((errData as any).error || 'Humanization failed');
+      }
+
+      // /api/chat returns a Server-Sent Events stream — read it properly
+      if (!res.body) throw new Error('No response body received');
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      let full = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+        for (let part of parts) {
+          part = part.trim();
+          if (!part || !part.startsWith('data:')) continue;
+          let dataStr = part.replace(/^data:\s*/, '').trim();
+          if (dataStr === '[DONE]') break;
+          while (dataStr.startsWith('data:')) dataStr = dataStr.replace(/^data:\s*/, '').trim();
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (parsed.error) throw new Error(parsed.error);
+            if (parsed.text) {
+              full += parsed.text;
+              setResult(full);
+            }
+          } catch (parseErr) {
+            if (parseErr instanceof SyntaxError) continue;
+            throw parseErr;
+          }
+        }
+      }
+      reader.releaseLock();
+
+      if (!full) throw new Error('No output received. Please try again.');
+      setWordCountAfter(full.trim().split(/\s+/).filter(Boolean).length);
     } catch (e: any) {
       setError(e.message || 'Something went wrong. Try again.');
     } finally {
