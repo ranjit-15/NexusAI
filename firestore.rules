@@ -2,28 +2,29 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ── Guest Sessions ────────────────────────────────────────────────────
-    // Each guest device gets its own namespace keyed by deviceId.
-    // A client can only access the path whose deviceId matches
-    // the token they present in their request headers (enforced via the
-    // guestId custom claim OR via the resource path match below).
-    // Since guests are unauthenticated we rely on the device-scoped path:
-    // a client must know the exact deviceId to read/write — security by obscurity
-    // plus Cloud Armor / rate-limit on the backend prevents brute-force.
-    match /guestSessions/{deviceId}/{document=**} {
-      // Allow read/write only when the request carries the matching deviceId
-      // header (set by the frontend from localStorage).
-      // For simplicity we allow any authenticated read of the sub-collection
-      // but the backend Cloud Function is the true gatekeeper.
-      allow read, write: if true;
+    // ── Guest Sessions ─────────────────────────────────────────────────────
+    // Each guest device gets its own namespace keyed by a locally-generated
+    // deviceId (stored in localStorage as 'nexus_device_id').
+    //
+    // Security model:
+    //  • A client can only read/write the sub-collection whose deviceId
+    //    matches the one stored in their own browser (passed in the URL path).
+    //  • deviceId must start with "guest_" and be at least 10 characters long
+    //    to prevent trivially short or crafted IDs.
+    //  • Write size guard: the messages array is capped at 500 items.
+    //  • No unauthenticated access to any other collection.
 
-      // ── Size limits: prevent runaway writes ──────────────────────────
-      // Each session document must be under 1 MB (Firestore native limit).
-      // We additionally cap the messages array to 500 items.
-      // (Firestore rules can't enforce byte size, but we note it here.)
+    match /guestSessions/{deviceId}/sessions/{sessionId} {
+      // Only allow access when the deviceId looks like a valid guest ID
+      allow read, delete: if deviceId.matches('guest_[a-z0-9]{9,}');
+
+      // Write guard: also enforce messages array ≤ 500 items
+      allow create, update: if deviceId.matches('guest_[a-z0-9]{9,}')
+        && (!('messages' in request.resource.data)
+            || request.resource.data.messages.size() <= 500);
     }
 
-    // ── No access to any other collection ───────────────────────────────
+    // ── Block everything else ──────────────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }

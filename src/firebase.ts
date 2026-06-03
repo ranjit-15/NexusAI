@@ -1,16 +1,23 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
+// Firebase config is loaded from VITE_ environment variables.
+// Set these in your .env.local file (never commit real keys to git).
 const firebaseConfig = {
-  apiKey: "AIzaSyCLcWl6Bb4oJEDoF-Y0AyeCfnf33HcPbtQ",
-  authDomain: "nexusais.firebaseapp.com",
-  projectId: "nexusais",
-  storageBucket: "nexusais.firebasestorage.app",
-  messagingSenderId: "391224641476",
-  appId: "1:391224641476:web:334165c8f764f91225c691",
+  apiKey:            import.meta.env.VITE_FIREBASE_API_KEY            as string,
+  authDomain:        import.meta.env.VITE_FIREBASE_AUTH_DOMAIN        as string,
+  projectId:         import.meta.env.VITE_FIREBASE_PROJECT_ID         as string,
+  storageBucket:     import.meta.env.VITE_FIREBASE_STORAGE_BUCKET     as string,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID as string,
+  appId:             import.meta.env.VITE_FIREBASE_APP_ID             as string,
 };
+
+if (!firebaseConfig.apiKey) {
+  console.warn('[NexusAI] Firebase env vars are missing. Check your .env.local file.');
+}
 
 const app = initializeApp(firebaseConfig);
 
 export const db = getFirestore(app);
 export default app;
+

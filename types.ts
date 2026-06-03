@@ -38,10 +38,12 @@ export interface ModelOption {
   capabilities?: string[];
 }
 
-export interface UserProfile {
-  displayName: string;
-  username: string;
-  createdAt: number;
-  theme?: string;
-  apiKey?: string;
-}
+// NOTE: UserProfile is not yet implemented (app uses guest sessions).
+// Uncomment and extend this when user authentication is added.
+// export interface UserProfile {
+//   displayName: string;
+//   username: string;
+//   createdAt: number;
+//   theme?: string;
+//   apiKey?: string;
+// }

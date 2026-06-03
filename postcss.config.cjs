@@ -1,6 +1,7 @@
+// Tailwind v4 is handled by the @tailwindcss/vite plugin in vite.config.ts.
+// Only autoprefixer is needed here for vendor prefix compatibility.
 module.exports = {
   plugins: {
-    tailwindcss: {},
     autoprefixer: {},
   },
 };

@@ -110,15 +110,18 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const [isDarkTheme, setIsDarkTheme] = useState(true);
+  const [isDarkTheme, setIsDarkTheme] = useState<boolean>(() => {
+    try { return localStorage.getItem('nexus_theme') !== 'light'; } catch { return true; }
+  });
 
-  // ── Theme initialization ────────────────────────────────────────────────
+  // ── Theme initialization + persistence ─────────────────────────────────
   useEffect(() => {
     if (isDarkTheme) {
       document.documentElement.classList.remove('light-theme');
     } else {
       document.documentElement.classList.add('light-theme');
     }
+    try { localStorage.setItem('nexus_theme', isDarkTheme ? 'dark' : 'light'); } catch { /* ignore */ }
   }, [isDarkTheme]);
 
   // ── Firestore sync: load sessions on mount ──────────────────────────────

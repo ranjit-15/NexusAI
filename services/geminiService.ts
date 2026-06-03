@@ -150,22 +150,10 @@ export class GeminiService {
     }
   }
 
-  public async generateSpeech(text: string, userApiKey?: string): Promise<string> {
-    const response = await fetch('/api/tts', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, apiKey: userApiKey }),
-    });
-
-    if (!response.ok) {
-      const err = await response.json().catch(() => ({}));
-      throw new Error(err.error || 'Failed to generate speech');
-    }
-
-    const data = await response.json();
-    if (!data.audio) throw new Error('No audio data received');
-    return data.audio;
-  }
+  // NOTE: Text-to-speech is not yet implemented.
+  // To enable it, create api/tts.js that accepts { text, apiKey }
+  // and returns { audio: base64AudioString }, then restore this method.
+  // public async generateSpeech(text: string, userApiKey?: string): Promise<string> { ... }
 
   public async fetchAvailableModels(): Promise<ModelOption[]> {
     try {
