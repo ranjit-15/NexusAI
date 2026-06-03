@@ -1,13 +1,4 @@
 {
-  "framework": "vite",
-  "redirects": [
-    {
-      "source": "/(.*)",
-      "has": [{ "type": "host", "value": "nexusais.dev" }],
-      "destination": "https://www.nexusais.dev/$1",
-      "permanent": true
-    }
-  ],
   "rewrites": [
     {
       "source": "/api/(.*)",
