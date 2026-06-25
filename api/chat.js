@@ -61,13 +61,8 @@ function buildConfig(model, thinking, sys) {
   };
 
   if (thinking && (model.startsWith('gemini') || model.startsWith('gemma-4'))) {
-    if (model.startsWith('gemma-4')) {
-      // Gemma 4 uses thinkingLevel at top-level thinkingConfig
-      cfg.thinkingConfig = { thinkingLevel: 'high' };
-    } else {
-      // Gemini models require thinkingConfig inside generationConfig
-      cfg.generationConfig = { thinkingConfig: { thinkingBudgetTokens: 1024 } };
-    }
+    // thinkingConfig goes at the top level of config for all models
+    cfg.thinkingConfig = { thinkingBudget: 1024 };
   }
 
   return cfg;

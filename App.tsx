@@ -456,6 +456,14 @@ const App: React.FC = () => {
         />
       )}
 
+      {/* ── Animated Background ────────────────────────────────── */}
+      <div className="bg-animated">
+        <div className="bg-orb bg-orb-1"></div>
+        <div className="bg-orb bg-orb-2"></div>
+        <div className="bg-orb bg-orb-3"></div>
+        <div className="bg-grid"></div>
+      </div>
+
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <Sidebar
         sessions={filteredSessions}
@@ -628,7 +636,7 @@ const App: React.FC = () => {
           <div className="messages-inner">
             {isWelcome ? (
               <div className="flex flex-col items-center justify-center min-h-[60vh] animate-fade-in">
-                <div className="w-16 h-16 mb-5 animate-float rounded-2xl overflow-hidden shadow-2xl border border-white/10">
+                <div className="w-24 h-24 mb-6 animate-float rounded-2xl overflow-hidden shadow-2xl border border-white/10">
                   <img src="/logo.png" alt="NexusAI Logo" className="w-full h-full object-cover" />
                 </div>
                 <h1 className="text-2xl font-bold mb-2" style={{ color: 'var(--text-primary)' }}>

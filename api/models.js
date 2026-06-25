@@ -24,9 +24,21 @@ export default async function handler(req, res) {
 
   try {
     const client = new GoogleGenAI({ apiKey });
-    const pager = await client.models.list({ config: { pageSize: 200, queryBase: true } });
-    const found = [...pager.page];
-    while (pager.hasNextPage() && found.length < 500) found.push(...(await pager.nextPage()));
+    const result = await client.models.list({ config: { pageSize: 200 } });
+
+    // The SDK may return an async iterable or an object with a .page array.
+    // Handle both patterns defensively.
+    const found = [];
+    if (result && Symbol.asyncIterator in Object(result)) {
+      for await (const m of result) {
+        found.push(m);
+        if (found.length >= 500) break;
+      }
+    } else if (result && Array.isArray(result.page)) {
+      found.push(...result.page);
+    } else if (Array.isArray(result)) {
+      found.push(...result);
+    }
 
     const apiIds = new Set(found.map(m => String(m?.name || '').replace(/^models\//, '').trim()));
     const available = CURATED_MODELS.filter(m => m.id === 'image-generator' || apiIds.has(m.id));

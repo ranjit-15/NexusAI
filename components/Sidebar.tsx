@@ -42,8 +42,8 @@ const Sidebar: React.FC<SidebarProps> = ({
           onClick={() => window.location.reload()}
           title="Refresh page"
         >
-          <img src="/logo.png" alt="NexusAI Logo" className="w-6 h-6 object-contain rounded-md" />
-          <span className="font-semibold text-sm whitespace-nowrap" style={{ color: 'var(--text-primary)' }}>
+          <img src="/logo.png" alt="NexusAI Logo" className="w-16 h-16 object-contain rounded-md" />
+          <span className="font-extrabold text-3xl whitespace-nowrap tracking-wide" style={{ color: 'var(--text-primary)' }}>
             NexusAI
           </span>
         </div>
